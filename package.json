@@ -1,7 +1,7 @@
 {
   "name": "@strait/sdk-react-native",
-  "version": "0.2.0",
-  "description": "Strait deep-linking SDK for React Native \u2014 deferred match (iOS fingerprint, Android Install Referrer)",
+  "version": "0.3.0",
+  "description": "Strait deep-linking SDK for React Native — deferred match (iOS fingerprint, Android Install Referrer)",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",

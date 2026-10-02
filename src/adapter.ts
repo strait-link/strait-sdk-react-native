@@ -2,6 +2,8 @@
  * Native bindings the SDK needs, behind an interface so the pure resolution
  * logic is testable in plain Node (no React Native runtime required).
  */
+import { browserScreenWidth } from './core.js';
+
 export interface DeviceFields {
   screenWidth: number;
   pixelRatio: number;
@@ -76,29 +78,4 @@ function resolveTimezone(): string {
   }
 }
 
-/** Extract the Strait link id from a Play Install Referrer string. */
-export function parseStraitLink(referrer: string | null): string | null {
-  if (!referrer) return null;
-  // No URLSearchParams: React Native's polyfill doesn't implement get().
-  for (const pair of referrer.split('&')) {
-    const [k, v = ''] = pair.split('=');
-    if (k === 'strait_link') {
-      try {
-        return decodeURIComponent(v) || null;
-      } catch {
-        return v || null;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Screen width as a browser reports it (screen.width). Matching needs the app
- * and the browser at the tap to agree, and Chrome rounds fractional widths UP
- * (1080px at 2.625 = 411.43 → 412) while a plain round gives 411. iPhone widths
- * are whole numbers, so this is a no-op there.
- */
-export function browserScreenWidth(logicalWidth: number): number {
-  return Math.ceil(logicalWidth - 0.001);
-}
+export { browserScreenWidth, parseStraitLink } from './core.js';

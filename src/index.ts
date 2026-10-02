@@ -99,4 +99,15 @@ export {
   type CreateStraitConfig,
   type KeyValueStore,
   type LinkEvent,
+  type LinkStart,
 } from './strait.js';
+export {
+  AppStateTracker,
+  classifyUrl,
+  normalizeLinkHosts,
+  splitUrl,
+  browserScreenWidth,
+  RESUME_WINDOW_MS,
+  TRANSIENT_PAUSE_MS,
+  type ClassifiedUrl,
+} from './core.js';

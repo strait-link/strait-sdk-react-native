@@ -151,6 +151,24 @@ describe('direct links', () => {
   });
 });
 
+describe('loading state (onLinkStart)', () => {
+  it('announces a link before it resolves, with the same id as the result', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine(resolved);
+    const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: rt.runtime, fetch: engine.fetch, storage: memoryStore() });
+    const order: string[] = [];
+    const ids: string[] = [];
+    strait.onLinkStart((s) => { order.push(`start:${s.kind}:${s.appState}`); ids.push(s.id); });
+    strait.onLink((e) => { order.push(`event:${e.kind}`); ids.push(e.id); });
+    await strait.start();
+    rt.advance(30_000);
+    rt.tap('https://links.test/sale');
+    await flush(); await flush();
+    expect(order).toEqual(['start:deferred:closed', 'event:deferred', 'start:direct:foreground', 'event:direct']);
+    expect(ids[2]).toBe(ids[3]);
+  });
+});
+
 describe('deferred links (installed after tapping)', () => {
   const referrerHit = { '/v1/referrer': { matched: true, longUrl: 'https://shop.example/promo/DIWALI20', linkId: 'lnk_7', matchMethod: 'install_referrer' } };
 
