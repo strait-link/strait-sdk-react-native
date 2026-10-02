@@ -121,13 +121,22 @@ export function createStrait(config: CreateStraitConfig): Strait {
     (runtime ??= await createReactNativeRuntime({ installReferrer: config.installReferrer }));
 
   const newId = (at: number) => `evt_${at}_${++seq}`;
+  // App listeners are isolated: one that throws must not stop the others or
+  // be mistaken for a failed resolve (which would emit a false 'network').
+  const safely = <T,>(cb: (v: T) => void, v: T) => {
+    try {
+      cb(v);
+    } catch (err) {
+      console.error('[strait] link listener threw:', err);
+    }
+  };
   const announce = (s: LinkStart) => {
-    for (const cb of startListeners) cb(s);
+    for (const cb of startListeners) safely(cb, s);
   };
   const emit = (id: string, e: Omit<LinkEvent, 'id'>) => {
     const event = { id, ...e };
     events.push(event);
-    for (const cb of listeners) cb(event);
+    for (const cb of listeners) safely(cb, event);
     return event;
   };
 
@@ -222,7 +231,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       }
     },
     onLink(cb) {
-      for (const e of events) cb(e);
+      for (const e of events) safely(cb, e);
       listeners.add(cb);
       return () => listeners.delete(cb);
     },

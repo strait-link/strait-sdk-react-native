@@ -169,6 +169,19 @@ describe('loading state (onLinkStart)', () => {
   });
 });
 
+describe('subscriber isolation', () => {
+  it("an app listener that throws doesn't produce a false 'network' event or stop others", async () => {
+    const rt = fakeRuntime({ initialURL: 'https://links.test/sale' });
+    const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: rt.runtime, fetch: fakeEngine(resolved).fetch, storage: memoryStore() });
+    const seen: LinkEvent[] = [];
+    strait.onLink(() => { throw new Error('app bug'); });
+    strait.onLink((e) => seen.push(e));
+    await strait.start();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ matched: true, url: 'https://shop.example/p/42?color=red' });
+  });
+});
+
 describe('deferred links (installed after tapping)', () => {
   const referrerHit = { '/v1/referrer': { matched: true, longUrl: 'https://shop.example/promo/DIWALI20', linkId: 'lnk_7', matchMethod: 'install_referrer' } };
 
