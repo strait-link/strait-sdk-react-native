@@ -1,27 +1,38 @@
 {
   "name": "@strait/sdk-react-native",
-  "version": "0.1.0",
-  "description": "Strait deep-linking SDK for React Native — deferred match (iOS fingerprint, Android Install Referrer)",
+  "version": "0.2.0",
+  "description": "Strait deep-linking SDK for React Native \u2014 deferred match (iOS fingerprint, Android Install Referrer)",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["react-native", "deep-linking", "deferred-deep-linking", "attribution", "strait"],
+  "keywords": [
+    "react-native",
+    "deep-linking",
+    "deferred-deep-linking",
+    "attribution",
+    "strait"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "react-native": ">=0.70"
   },
   "peerDependenciesMeta": {
-    "react-native": { "optional": true }
+    "react-native": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^4.1.8"
-  }
+  },
+  "react-native": "dist/index.native.js"
 }

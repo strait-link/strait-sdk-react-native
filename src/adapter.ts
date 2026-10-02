@@ -35,7 +35,7 @@ export async function createReactNativeAdapter(): Promise<NativeAdapter> {
     collectDevice() {
       const { width } = Dimensions.get('screen');
       return {
-        screenWidth: Math.round(width),
+        screenWidth: browserScreenWidth(width),
         pixelRatio: PixelRatio.get(),
         language: resolveLocale(rn),
         timezone: resolveTimezone(),
@@ -79,6 +79,26 @@ function resolveTimezone(): string {
 /** Extract the Strait link id from a Play Install Referrer string. */
 export function parseStraitLink(referrer: string | null): string | null {
   if (!referrer) return null;
-  const params = new URLSearchParams(referrer);
-  return params.get('strait_link');
+  // No URLSearchParams: React Native's polyfill doesn't implement get().
+  for (const pair of referrer.split('&')) {
+    const [k, v = ''] = pair.split('=');
+    if (k === 'strait_link') {
+      try {
+        return decodeURIComponent(v) || null;
+      } catch {
+        return v || null;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Screen width as a browser reports it (screen.width). Matching needs the app
+ * and the browser at the tap to agree, and Chrome rounds fractional widths UP
+ * (1080px at 2.625 = 411.43 → 412) while a plain round gives 411. iPhone widths
+ * are whole numbers, so this is a no-op there.
+ */
+export function browserScreenWidth(logicalWidth: number): number {
+  return Math.ceil(logicalWidth - 0.001);
 }

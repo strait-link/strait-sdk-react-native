@@ -89,3 +89,14 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
   }
   return post('/v1/match', { publishableKey: config.publishableKey, platform, ...device });
 }
+
+export {
+  createStrait,
+  createReactNativeRuntime,
+  fromPlayInstallReferrer,
+  type Strait,
+  type StraitRuntime,
+  type CreateStraitConfig,
+  type KeyValueStore,
+  type LinkEvent,
+} from './strait.js';
