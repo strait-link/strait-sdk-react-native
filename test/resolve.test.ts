@@ -42,7 +42,7 @@ describe('resolveDeferredLink — Android deterministic path', () => {
       matchMethod: 'install_referrer',
     });
     const res = await resolveDeferredLink({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       endpoint: 'https://go.example.com/',
       adapter: adapterFor('android', 'strait_link=lnk_42'),
       fetch: fetchMock,
@@ -51,7 +51,7 @@ describe('resolveDeferredLink — Android deterministic path', () => {
     const [url, init] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(url).toBe('https://go.example.com/v1/referrer');
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       linkId: 'lnk_42',
       platform: 'android',
     });
@@ -60,7 +60,7 @@ describe('resolveDeferredLink — Android deterministic path', () => {
   it('falls back to /v1/match when the referrer has no strait_link', async () => {
     const fetchMock = jsonFetch({ matched: false, matchMethod: 'none' });
     await resolveDeferredLink({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       endpoint: 'https://go.example.com',
       adapter: adapterFor('android', 'utm_source=organic'),
       fetch: fetchMock,
@@ -76,7 +76,7 @@ describe('resolveDeferredLink — Android deterministic path', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ matched: false, matchMethod: 'none' }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ matched: true, longUrl: 'https://app/y', matchMethod: 'exact_ext' }) }) as unknown as typeof fetch;
     const res = await resolveDeferredLink({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       endpoint: 'https://go.example.com',
       adapter: adapterFor('android', 'strait_link=lnk_x'),
       fetch: fetchMock,
@@ -87,10 +87,10 @@ describe('resolveDeferredLink — Android deterministic path', () => {
 });
 
 describe('resolveDeferredLink — iOS probabilistic path', () => {
-  it('posts device fields + appId to /v1/match', async () => {
+  it('posts device fields + publishableKey to /v1/match', async () => {
     const fetchMock = jsonFetch({ matched: true, longUrl: 'https://app/z', matchMethod: 'exact_ext' });
     const res = await resolveDeferredLink({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       endpoint: 'https://go.example.com',
       adapter: adapterFor('ios'),
       fetch: fetchMock,
@@ -99,7 +99,7 @@ describe('resolveDeferredLink — iOS probabilistic path', () => {
     const [url, init] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(url).toBe('https://go.example.com/v1/match');
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       platform: 'ios',
       ...device,
     });
@@ -110,7 +110,7 @@ describe('resolveDeferredLink — iOS probabilistic path', () => {
       throw new Error('offline');
     }) as unknown as typeof fetch;
     const res = await resolveDeferredLink({
-      appId: 'ten_1',
+      publishableKey: 'bk_pub_test_ten1key01',
       endpoint: 'https://go.example.com',
       adapter: adapterFor('ios'),
       fetch: fetchMock,

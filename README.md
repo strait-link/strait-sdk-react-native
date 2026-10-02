@@ -22,7 +22,7 @@ Call once after first launch and route to the result:
 import { resolveDeferredLink } from '@strait/sdk-react-native';
 
 const result = await resolveDeferredLink({
-  appId: 'YOUR_APP_ID',                 // from the Strait dashboard
+  publishableKey: 'bk_pub_live_…',    // Dashboard → Get started (safe in apps; never the secret key)
   endpoint: 'https://go.yourbrand.com', // your Strait link host
 });
 
@@ -59,7 +59,7 @@ Inject a fake adapter and fetch:
 
 ```ts
 await resolveDeferredLink({
-  appId, endpoint,
+  publishableKey, endpoint,
   adapter: { platform: () => 'ios', collectDevice: () => ({...}), getInstallReferrer: async () => null },
   fetch: myFetchStub,
 });

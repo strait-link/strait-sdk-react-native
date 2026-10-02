@@ -9,8 +9,11 @@ export { parseStraitLink } from './adapter.js';
 export { computeSignature, h32 } from './signature.js';
 
 export interface StraitConfig {
-  /** Your Strait app id (tenant id from the dashboard). */
-  appId: string;
+  /**
+   * Your workspace's publishable key (`bk_pub_live_…`), from Dashboard →
+   * Get started. Safe to ship in apps/websites — never use the secret key here.
+   */
+  publishableKey: string;
   /** The Strait link host, e.g. https://go.yourbrand.com. */
   endpoint: string;
   /** Override the native adapter (tests / custom platforms). */
@@ -71,7 +74,7 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
       linkId = null;
     }
     if (linkId) {
-      const r = await post('/v1/referrer', { appId: config.appId, linkId, platform });
+      const r = await post('/v1/referrer', { publishableKey: config.publishableKey, linkId, platform });
       if (r.matched) return r;
       // else fall through to the probabilistic path
     }
@@ -84,5 +87,5 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
   } catch {
     return NONE;
   }
-  return post('/v1/match', { appId: config.appId, platform, ...device });
+  return post('/v1/match', { publishableKey: config.publishableKey, platform, ...device });
 }
