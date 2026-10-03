@@ -6,7 +6,7 @@ The package name, npm scope, repo URL, homepage and copyright holder all come fr
 ## One-time owner setup
 
 1. **Pick the brand.** Run `shared-spec/scripts/rename-brand.sh … --final --apply`
-   from the `strait/` folder (or edit `brand.json`, set `"final": true`, run
+   from the workspace root (the folder holding every SDK repo) (or edit `brand.json`, set `"final": true`, run
    `node scripts/brand.mjs --write`). Commit. The release workflow refuses to
    publish while `brand.json` still has placeholders or `"final": false`.
 2. **Make the GitHub repo public** (npm provenance needs a public repo whose URL

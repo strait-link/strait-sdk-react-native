@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+Renamed to Strait (breaking; clean break, no aliases).
+
+- Package is now `@strait/sdk-react-native`; repo `bazingga08/strait-sdk-react-native`,
+  homepage https://usestrait.com.
+- API: `createStrait`, `Strait`, `StraitRuntime`, `CreateStraitConfig`, `StraitConfig`, `parseStraitLink`, `parseStraitClick`.
+- Wire params: only `strait_click` (tap id) and `strait_link` (Play referrer) are read.
+- Storage keys: `strait.deferredChecked`, `strait.pendingOpens` (old values are ignored,
+  so the deferred check runs once more after upgrading).
+- Android native module is now `StraitInstallReferrer`.
+
 ## 0.4.0
 
 - Every link open is reported exactly once (shared-spec/SDK-CONTRACT.md B14):
