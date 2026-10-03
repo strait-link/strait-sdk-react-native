@@ -8,11 +8,14 @@ every other SDK via [`shared-spec`](../shared-spec) golden vectors (run in CI he
 
 ## Install
 
+<!-- brand:install -->
 ```sh
 npm install @strait/sdk-react-native
-# Android deterministic match also wants the Play Install Referrer native module
-# (optional but recommended) — see "Android" below.
 ```
+<!-- /brand:install -->
+
+Android's exact deferred match also wants the Play Install Referrer native
+module (optional but recommended) — see "Android" below.
 
 ## Use
 
