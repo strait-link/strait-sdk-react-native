@@ -169,6 +169,39 @@ export function pruneOpenQueue<T extends { at: number }>(queue: T[], now: number
   return queue.filter((r) => now - r.at <= OPEN_QUEUE_MAX_AGE_MS).slice(-OPEN_QUEUE_MAX);
 }
 
+/**
+ * Conversion events carry the tap id of the most recent attributed link open
+ * for this long (contract B15).
+ */
+export const ATTRIBUTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Storage value for the remembered tap (key `strait.lastTap`): `{"clickId":…,"at":<epoch ms>}`. */
+export function rememberTap(clickId: string, at: number): string {
+  return JSON.stringify({ clickId: clickId.toLowerCase(), at });
+}
+
+/**
+ * The `clickId` a conversion event sends (contract B15): an explicit non-empty
+ * `explicit` wins; otherwise the remembered tap (`stored`, see `rememberTap`)
+ * when it is a valid tap id opened at most ATTRIBUTION_WINDOW_MS before `now`
+ * (and not after it). Anything unreadable means no tap.
+ */
+export function eventClickId(stored: string | null | undefined, now: number, explicit?: string | null): string | null {
+  if (typeof explicit === 'string' && explicit !== '') return explicit;
+  if (!stored) return null;
+  let tap: unknown;
+  try {
+    tap = JSON.parse(stored);
+  } catch {
+    return null;
+  }
+  const { clickId, at } = (tap ?? {}) as { clickId?: unknown; at?: unknown };
+  if (typeof clickId !== 'string' || !CLICK_ID.test(clickId)) return null;
+  if (typeof at !== 'number' || !Number.isFinite(at)) return null;
+  const age = now - at;
+  return age >= 0 && age <= ATTRIBUTION_WINDOW_MS ? clickId.toLowerCase() : null;
+}
+
 /** Whether a failed report should be kept for retry: no answer, 429 or 5xx. */
 export function shouldRetryReport(status: number | null): boolean {
   return status === null || status === 429 || status >= 500;

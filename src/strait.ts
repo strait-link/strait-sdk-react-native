@@ -3,11 +3,13 @@ import {
   AppStateTracker,
   browserScreenWidth,
   classifyUrl,
+  eventClickId,
   newOpenId,
   normalizeLinkHosts,
   parseStraitClick,
   parseStraitLink,
   pruneOpenQueue,
+  rememberTap,
   shouldRetryReport,
   splitUrl,
 } from './core.js';
@@ -107,10 +109,14 @@ export interface Strait {
   reportFingerprint(): Promise<unknown>;
   /** Engine's comparison of the app and browser fingerprints on this network. */
   compareFingerprint(): Promise<unknown>;
-  /** Conversion / revenue event. Resolves true when accepted. */
+  /**
+   * Conversion / revenue event. Resolves true when accepted. Carries the tap
+   * id of the last attributed link open (≤7 days, contract B15) unless you
+   * pass `clickId` yourself.
+   */
   trackEvent(
     name: string,
-    extra?: { value?: number; currency?: string; linkId?: string },
+    extra?: { value?: number; currency?: string; linkId?: string; clickId?: string },
   ): Promise<boolean>;
   /** Open reports saved while offline, waiting to be sent (debugging). */
   pendingOpenReports(): Promise<number>;
@@ -137,6 +143,7 @@ interface OpenReport {
 
 const DEFERRED_FLAG = 'strait.deferredChecked';
 const QUEUE_KEY = 'strait.pendingOpens';
+const TAP_KEY = 'strait.lastTap';
 export function createStrait(config: CreateStraitConfig): Strait {
   const doFetch = config.fetch ?? globalThis.fetch;
   const base = config.endpoint.replace(/\/+$/, '');
@@ -181,6 +188,16 @@ export function createStrait(config: CreateStraitConfig): Strait {
     const json = await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, json: json as Record<string, any> };
   };
+
+  // ── Remembered tap (B15): the tap id of the last attributed link open, sent
+  // with conversion events. An attributed open without a known tap id (short
+  // link, fingerprint match) forgets it: the newer touch wins. Writes are
+  // chained so a trackEvent right after an open sees it; failures are ignored.
+  let tapWrite: Promise<unknown> = Promise.resolve();
+  const setTap = (value: string) => {
+    tapWrite = tapWrite.then(() => storage.setItem(TAP_KEY, value)).catch(() => undefined);
+  };
+  const noteTap = (clickId: string | null | undefined, at: number) => setTap(clickId ? rememberTap(clickId, at) : '');
 
   // ── Open reports (B14): every open is reported once; failures are saved and
   // retried. Queue operations run one at a time (storage is async).
@@ -260,6 +277,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         });
         const matched = json.matched === true;
         const reason = matched ? undefined : json.reason ?? json.error;
+        if (matched) noteTap(null, t0);
         if (json.recorded !== true) void report({ ...base, matched, reason, linkId: json.linkId });
         return emit(id, {
           kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason,
@@ -271,6 +289,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
       }
     }
+    if (c.clickId) noteTap(c.clickId, t0);
     // Navigation never waits for the report.
     void report({
       openId: id, kind: 'direct', route: c.route, appState, platform, url: c.url,
@@ -309,6 +328,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
             publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag,
           });
           if (json.matched) {
+            if (record) noteTap(clickId, t0);
             return emit(id, {
               kind: 'deferred', route: 'install_referrer', appState: 'closed', matched: true,
               ...destination(json.longUrl), linkId: json.linkId ?? linkId, ms: r.now() - t0, at: t0,
@@ -319,6 +339,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       const { json } = await answered('/v1/match', {
         publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag,
       });
+      if (record && json.matched === true) noteTap(null, t0);
       return emit(id, {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),
@@ -378,8 +399,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
     async trackEvent(name, extra = {}) {
       const r = await rt();
       try {
+        await tapWrite;
+        const stored = await storage.getItem(TAP_KEY).catch(() => null);
+        const clickId = eventClickId(stored, r.now(), extra.clickId) ?? undefined;
         return (await call('POST', '/v1/event', {
-          publishableKey: config.publishableKey, event: name, platform: r.platform(), ...extra,
+          publishableKey: config.publishableKey, event: name, platform: r.platform(), ...extra, clickId,
         })).ok;
       } catch {
         return false;

@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AppStateTracker, browserScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
-  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId,
-  OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
+  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId,
+  ATTRIBUTION_WINDOW_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
 
 /** Shared cross-SDK contract (shared-spec/conformance-vectors.json). */
@@ -11,7 +11,10 @@ const v = JSON.parse(readFileSync(new URL('./conformance-vectors.json', import.m
 
 describe('conformance vectors', () => {
   it('constants', () => {
-    expect({ RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS }).toEqual(v.constants);
+    expect({ RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, ATTRIBUTION_WINDOW_MS }).toEqual(v.constants);
+  });
+  it.each(v.eventClickId)('eventClickId: $name', ({ stored, now, explicit, expected }) => {
+    expect(eventClickId(stored, now, explicit)).toBe(expected);
   });
   it.each(v.screenWidth)('browserScreenWidth($logical)', ({ logical, expected }) => {
     expect(browserScreenWidth(logical)).toBe(expected);

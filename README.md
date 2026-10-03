@@ -76,6 +76,18 @@ opened) from **existing users** (already had the app). The deferred check is
 only marked done once the server answered, so an offline first launch is
 retried on the next launch.
 
+### Conversion events (revenue on the exact tap)
+
+```ts
+await strait.trackEvent('purchase', { value: 49.99, currency: 'USD' });
+```
+
+The event carries the tap id of the last link open that had one (a browser
+hand-off or a Play install) for 7 days, so the dashboard can place the revenue
+on that tap's channel and A/B variant (contract B15). A newer open by a
+verified short link replaces it (its tap id isn't known to the app, so the
+event then carries none). Pass `clickId` to set it yourself.
+
 ## How it matches
 
 | Platform | Method | Precision |

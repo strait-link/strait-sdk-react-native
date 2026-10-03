@@ -246,6 +246,81 @@ describe('fingerprint check + events', () => {
   });
 });
 
+describe('conversion events carry the tap id (B15)', () => {
+  const TAP = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
+  const OTHER = '11111111-2222-4333-8444-555555555555';
+  const DAY = 24 * 60 * 60 * 1000;
+  const eventBody = (engine: ReturnType<typeof fakeEngine>) => engine.calls.filter((c) => c.path === '/v1/event').at(-1)?.body;
+
+  it('a browser hand-off tap is remembered and attached to a purchase', async () => {
+    const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${TAP}` });
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const { strait, storage } = start(rt, engine);
+    await strait.start();
+    rt.advance(DAY);
+    await strait.trackEvent('purchase', { value: 5, currency: 'USD' });
+    expect(eventBody(engine)).toMatchObject({ event: 'purchase', clickId: TAP });
+    expect(JSON.parse(storage.data.get('strait.lastTap')!)).toEqual({ clickId: TAP, at: 1_000_000 });
+  });
+
+  it('not after 7 days', async () => {
+    const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${TAP}` });
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const { strait } = start(rt, engine);
+    await strait.start();
+    rt.advance(7 * DAY + 1);
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)).not.toHaveProperty('clickId');
+  });
+
+  it('an explicit clickId overrides the remembered tap', async () => {
+    const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${TAP}` });
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const { strait } = start(rt, engine);
+    await strait.start();
+    await strait.trackEvent('purchase', { clickId: OTHER });
+    expect(eventBody(engine)?.clickId).toBe(OTHER);
+  });
+
+  it('no remembered tap: no clickId', async () => {
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/match': { matched: false } });
+    const { strait } = start(fakeRuntime(), engine);
+    await strait.start();
+    await strait.trackEvent('signup');
+    expect(eventBody(engine)).not.toHaveProperty('clickId');
+  });
+
+  it('the Play referrer tap is remembered on a deferred install', async () => {
+    const rt = fakeRuntime({ referrer: `strait_link=lnk_7&strait_click=${TAP}` });
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/referrer': { matched: true, longUrl: 'https://shop.example/p/7', linkId: 'lnk_7' } });
+    const { strait } = start(rt, engine);
+    await strait.start();
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)?.clickId).toBe(TAP);
+  });
+
+  it('a newer short-link open (tap id unknown) forgets the older tap', async () => {
+    const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${TAP}` });
+    const engine = fakeEngine({ ...resolved, '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const { strait } = start(rt, engine);
+    await strait.start();
+    rt.tap('https://links.test/sale');
+    await flush();
+    await flush();
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)).not.toHaveProperty('clickId');
+  });
+
+  it('unreadable storage never blocks the event', async () => {
+    const broken: KeyValueStore = { getItem: async () => { throw new Error('io'); }, setItem: async () => { throw new Error('io'); } };
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: fakeRuntime({ initialURL: `straitlink://x.example/?strait_click=${TAP}` }).runtime, fetch: engine.fetch, storage: broken });
+    await strait.start();
+    expect(await strait.trackEvent('purchase')).toBe(true);
+    expect(eventBody(engine)).not.toHaveProperty('clickId');
+  });
+});
+
 import { splitUrl } from '../src/strait.js';
 describe('splitUrl (no reliance on React Native URL)', () => {
   it('splits https and custom-scheme URLs', () => {
