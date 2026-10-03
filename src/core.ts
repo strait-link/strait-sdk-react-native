@@ -69,19 +69,70 @@ export function normalizeLinkHosts(endpoint: string, linkHosts: string[] = []): 
 
 /** The strait_link id inside a Play Install Referrer string, or null. */
 export function parseStraitLink(referrer: string | null | undefined): string | null {
+  return referrerParam(referrer, 'strait_link');
+}
+
+/**
+ * The tap id (strait_click) inside a Play Install Referrer string, or null.
+ * Joins the install to the exact tap that sent the user to the store.
+ */
+export function parseStraitClick(referrer: string | null | undefined): string | null {
+  const v = referrerParam(referrer, 'strait_click');
+  return v && CLICK_ID.test(v) ? v : null;
+}
+
+function referrerParam(referrer: string | null | undefined, key: string): string | null {
   if (!referrer) return null;
   for (const pair of referrer.split('&')) {
     const i = pair.indexOf('=');
-    if (i < 0 || pair.slice(0, i) !== 'strait_link') continue;
+    if (i < 0 || pair.slice(0, i) !== key) continue;
     const v = decode(pair.slice(i + 1));
     return v || null;
   }
   return null;
 }
 
+/** A tap id as Strait issues it (uuid); anything else is ignored. */
+const CLICK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Remove every `strait_click` parameter from a URL's query, keeping the rest
+ * of the URL byte-for-byte (fragment included). Returns the cleaned URL and
+ * the tap id (null when absent or malformed). The app never sees the tap id.
+ */
+export function takeClickId(raw: string): { url: string; clickId: string | null } {
+  const s = raw.trim();
+  const hash = s.indexOf('#');
+  const beforeHash = hash < 0 ? s : s.slice(0, hash);
+  const frag = hash < 0 ? '' : s.slice(hash);
+  const q = beforeHash.indexOf('?');
+  if (q < 0) return { url: s, clickId: null };
+  let clickId: string | null = null;
+  const kept = beforeHash
+    .slice(q + 1)
+    .split('&')
+    .filter((pair) => {
+      const i = pair.indexOf('=');
+      if (decode(i < 0 ? pair : pair.slice(0, i)) !== 'strait_click') return true;
+      const v = decode(i < 0 ? '' : pair.slice(i + 1));
+      if (CLICK_ID.test(v)) clickId = v.toLowerCase();
+      return false;
+    });
+  const query = kept.join('&');
+  return { url: beforeHash.slice(0, q) + (query ? `?${query}` : '') + frag, clickId };
+}
+
 export type ClassifiedUrl =
   | { route: 'app_link'; needsResolve: true }
-  | { route: 'app_link' | 'custom_scheme'; needsResolve: false; url: string; path: string; params: Record<string, string> }
+  | {
+      route: 'app_link' | 'custom_scheme';
+      needsResolve: false;
+      url: string;
+      path: string;
+      params: Record<string, string>;
+      /** Tap id from a Strait hand-off (removed from url/params), else null. */
+      clickId: string | null;
+    }
   | null;
 
 /**
@@ -89,17 +140,45 @@ export type ClassifiedUrl =
  * - https on a Strait link host → a short link; ask /v1/resolve for the destination.
  * - other https (a verified link on the customer's own site) → it IS the destination.
  * - yourapp://host/path (browser hand-off) → destination https://host/path.
+ * A `strait_click` tap id is removed from the destination and returned apart.
  * Returns null for anything that isn't a URL.
  */
 export function classifyUrl(raw: string, linkHosts: string[]): ClassifiedUrl {
-  const p = splitUrl(raw);
-  if (!p) return null;
-  const isWeb = p.scheme === 'https' || p.scheme === 'http';
-  if (isWeb && linkHosts.map((h) => h.toLowerCase()).includes(p.host)) {
+  const p0 = splitUrl(raw);
+  if (!p0) return null;
+  const isWeb = p0.scheme === 'https' || p0.scheme === 'http';
+  if (isWeb && linkHosts.map((h) => h.toLowerCase()).includes(p0.host)) {
     return { route: 'app_link', needsResolve: true };
   }
-  const url = isWeb ? raw.trim() : raw.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, 'https://');
-  return { route: isWeb ? 'app_link' : 'custom_scheme', needsResolve: false, url, path: p.path, params: p.params };
+  const { url: clean, clickId } = takeClickId(raw);
+  const p = splitUrl(clean)!;
+  const url = isWeb ? clean : clean.replace(/^[a-z][a-z0-9+.-]*:\/\//i, 'https://');
+  return { route: isWeb ? 'app_link' : 'custom_scheme', needsResolve: false, url, path: p.path, params: p.params, clickId };
+}
+
+/** Open reports waiting to be sent are kept at most this long… */
+export const OPEN_QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** …and at most this many (oldest dropped first). */
+export const OPEN_QUEUE_MAX = 100;
+
+/**
+ * Prune a pending-report queue: drop reports older than OPEN_QUEUE_MAX_AGE_MS
+ * (by their `at`), then keep the newest OPEN_QUEUE_MAX. Order is kept.
+ */
+export function pruneOpenQueue<T extends { at: number }>(queue: T[], now: number): T[] {
+  return queue.filter((r) => now - r.at <= OPEN_QUEUE_MAX_AGE_MS).slice(-OPEN_QUEUE_MAX);
+}
+
+/** Whether a failed report should be kept for retry: no answer, 429 or 5xx. */
+export function shouldRetryReport(status: number | null): boolean {
+  return status === null || status === 429 || status >= 500;
+}
+
+/** A unique id for one link open (the engine de-duplicates retries by it). */
+export function newOpenId(now: number, random: () => number = Math.random): string {
+  let r = '';
+  for (let i = 0; i < 12; i++) r += 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(random() * 36)];
+  return `o_${now.toString(36)}_${r}`;
 }
 
 /** A link arriving this soon after the app came back to the front came "from background". */

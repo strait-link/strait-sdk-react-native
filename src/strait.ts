@@ -1,5 +1,16 @@
 import type { DeviceFields } from './adapter.js';
-import { AppStateTracker, browserScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitLink, splitUrl } from './core.js';
+import {
+  AppStateTracker,
+  browserScreenWidth,
+  classifyUrl,
+  newOpenId,
+  normalizeLinkHosts,
+  parseStraitClick,
+  parseStraitLink,
+  pruneOpenQueue,
+  shouldRetryReport,
+  splitUrl,
+} from './core.js';
 
 export { browserScreenWidth, splitUrl } from './core.js';
 
@@ -27,6 +38,7 @@ export interface KeyValueStore {
 }
 
 export interface LinkEvent {
+  /** Unique per open; also the id Strait records this open under. */
   id: string;
   /** direct = the app was opened by a link; deferred = link tapped before install. */
   kind: 'direct' | 'deferred';
@@ -100,10 +112,31 @@ export interface Strait {
     name: string,
     extra?: { value?: number; currency?: string; linkId?: string },
   ): Promise<boolean>;
+  /** Open reports saved while offline, waiting to be sent (debugging). */
+  pendingOpenReports(): Promise<number>;
+  /** Send saved open reports now (also happens on start and on resume). */
+  flushOpenReports(): Promise<void>;
   stop(): void;
 }
 
+/** One app open as reported to POST /v1/open (contract B14). */
+interface OpenReport {
+  openId: string;
+  kind: 'direct' | 'deferred';
+  route: LinkEvent['route'];
+  appState: LinkEvent['appState'];
+  platform: string;
+  url?: string;
+  clickId?: string;
+  linkId?: string;
+  matched: boolean;
+  reason?: string;
+  firstLaunch: boolean;
+  at: number;
+}
+
 const DEFERRED_FLAG = 'strait.deferredChecked';
+const QUEUE_KEY = 'strait.pendingOpens';
 export function createStrait(config: CreateStraitConfig): Strait {
   const doFetch = config.fetch ?? globalThis.fetch;
   const base = config.endpoint.replace(/\/+$/, '');
@@ -115,12 +148,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
   let runtime: StraitRuntime | undefined = config.runtime;
   const tracker = new AppStateTracker();
   const startListeners = new Set<(s: LinkStart) => void>();
-  let seq = 0;
 
   const rt = async (): Promise<StraitRuntime> =>
     (runtime ??= await createReactNativeRuntime({ installReferrer: config.installReferrer }));
 
-  const newId = (at: number) => `evt_${at}_${++seq}`;
+  const newId = (at: number) => newOpenId(at);
   // App listeners are isolated: one that throws must not stop the others or
   // be mistaken for a failed resolve (which would emit a false 'network').
   const safely = <T,>(cb: (v: T) => void, v: T) => {
@@ -150,49 +182,131 @@ export function createStrait(config: CreateStraitConfig): Strait {
     return { ok: res.ok, status: res.status, json: json as Record<string, any> };
   };
 
-  async function handleUrl(raw: string, appState: LinkEvent['appState']) {
+  // ── Open reports (B14): every open is reported once; failures are saved and
+  // retried. Queue operations run one at a time (storage is async).
+  let queueOp: Promise<unknown> = Promise.resolve();
+  const serial = <T,>(fn: () => Promise<T>): Promise<T> => {
+    const p = queueOp.then(fn, fn);
+    queueOp = p.catch(() => undefined);
+    return p;
+  };
+  const readQueue = async (): Promise<OpenReport[]> => {
+    try {
+      const v = JSON.parse((await storage.getItem(QUEUE_KEY)) ?? '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  };
+  const writeQueue = (q: OpenReport[]) => storage.setItem(QUEUE_KEY, JSON.stringify(q)).catch(() => undefined);
+  const enqueue = (report: OpenReport) =>
+    serial(async () => {
+      const r = await rt();
+      await writeQueue(pruneOpenQueue([...(await readQueue()), report], r.now()));
+    });
+  /** POST /v1/open; resolves the HTTP status, or null when there was no answer. */
+  const sendReport = async (report: OpenReport): Promise<number | null> => {
+    try {
+      return (await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report })).status;
+    } catch {
+      return null;
+    }
+  };
+  /** Report an open now; keep it for retry if it doesn't get through. */
+  const report = async (rep: OpenReport) => {
+    const status = await sendReport(rep);
+    if (shouldRetryReport(status)) await enqueue(rep);
+    else void flush(); // the network works: send anything saved earlier
+  };
+  let flushing: Promise<void> | null = null;
+  const flush = (): Promise<void> =>
+    (flushing ??= serial(async () => {
+      const r = await rt();
+      const queue = pruneOpenQueue(await readQueue(), r.now());
+      const keep: OpenReport[] = [];
+      let offline = false;
+      for (const rep of queue) {
+        // Once one gets no answer at all, keep the rest for later.
+        if (offline) {
+          keep.push(rep);
+          continue;
+        }
+        const status = await sendReport(rep);
+        offline = status === null;
+        if (shouldRetryReport(status)) keep.push(rep);
+      }
+      await writeQueue(keep);
+    }).finally(() => {
+      flushing = null;
+    }));
+
+  async function handleUrl(raw: string, appState: LinkEvent['appState'], firstLaunch = false) {
     const r = await rt();
     const t0 = r.now();
     const id = newId(t0);
+    const platform = r.platform();
     announce({ id, kind: 'direct', appState, rawUrl: raw, at: t0 });
     const c = classifyUrl(raw, linkHosts);
     if (!c) {
       return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'invalid_url', ms: r.now() - t0, at: t0 });
     }
     if (c.needsResolve) {
+      // The lookup is also the open report (openId); the engine says whether
+      // it recorded it, and anything short of that is retried via /v1/open.
+      const base: OpenReport = { openId: id, kind: 'direct', route: 'app_link', appState, platform, url: raw, matched: false, firstLaunch, at: t0 };
       try {
         const { json } = await call('POST', '/v1/resolve', {
-          publishableKey: config.publishableKey,
-          url: raw,
-          platform: r.platform(),
+          publishableKey: config.publishableKey, url: raw, platform, openId: id, appState, firstLaunch, at: t0,
         });
+        const matched = json.matched === true;
+        const reason = matched ? undefined : json.reason ?? json.error;
+        if (json.recorded !== true) void report({ ...base, matched, reason, linkId: json.linkId });
         return emit(id, {
-          kind: 'direct', route: 'app_link', appState, rawUrl: raw,
-          matched: json.matched === true, reason: json.matched ? undefined : json.reason ?? json.error,
-          ...destination(json.matched ? json.longUrl : undefined), linkId: json.linkId,
+          kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason,
+          ...destination(matched ? json.longUrl : undefined), linkId: json.linkId,
           ms: r.now() - t0, at: t0,
         });
       } catch {
+        void enqueue({ ...base, reason: 'network' });
         return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
       }
     }
+    // Navigation never waits for the report.
+    void report({
+      openId: id, kind: 'direct', route: c.route, appState, platform, url: c.url,
+      clickId: c.clickId ?? undefined, matched: true, firstLaunch, at: t0,
+    });
     return emit(id, {
       kind: 'direct', route: c.route, appState, rawUrl: raw, matched: true,
       url: c.url, path: c.path, params: c.params, ms: r.now() - t0, at: t0,
     });
   }
 
-  async function runDeferred(): Promise<LinkEvent> {
+  /**
+   * The deferred check. `record` (the once-per-install run) sends the openId so
+   * the engine records this first open + install exactly once; the debug
+   * re-check doesn't, so it never adds installs.
+   */
+  async function runDeferred(record: boolean): Promise<LinkEvent> {
     const r = await rt();
     const t0 = r.now();
     const id = newId(t0);
+    const tag = record ? { openId: id, at: t0 } : {};
     announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
+    // No answer, 429 or 5xx = try again next launch (reported as 'network').
+    const answered = async (path: string, body: unknown) => {
+      const res = await call('POST', path, body);
+      if (shouldRetryReport(res.status)) throw new Error(`HTTP ${res.status}`);
+      return res;
+    };
     try {
       if (r.platform() === 'android') {
-        const linkId = parseStraitLink(await r.getInstallReferrer().catch(() => null));
+        const referrer = await r.getInstallReferrer().catch(() => null);
+        const linkId = parseStraitLink(referrer);
         if (linkId) {
-          const { json } = await call('POST', '/v1/referrer', {
-            publishableKey: config.publishableKey, linkId, platform: 'android',
+          const clickId = parseStraitClick(referrer) ?? undefined;
+          const { json } = await answered('/v1/referrer', {
+            publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag,
           });
           if (json.matched) {
             return emit(id, {
@@ -202,8 +316,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
           }
         }
       }
-      const { json } = await call('POST', '/v1/match', {
-        publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(),
+      const { json } = await answered('/v1/match', {
+        publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag,
       });
       return emit(id, {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
@@ -219,16 +333,25 @@ export function createStrait(config: CreateStraitConfig): Strait {
     async start() {
       const r = await rt();
       unsubs.push(
-        r.onAppState((s) => tracker.onState(s, r.now())),
+        r.onAppState((s) => {
+          tracker.onState(s, r.now());
+          if (s === 'active') void flush();
+        }),
         r.onURL((u) => void handleUrl(u, tracker.classify(r.now()))),
       );
       const initial = await r.getInitialURL().catch(() => null);
-      if (initial) await handleUrl(initial, 'closed');
-      if ((await storage.getItem(DEFERRED_FLAG)) !== '1') {
-        await storage.setItem(DEFERRED_FLAG, '1');
-        // Opened by a link on first launch = the user's intent right now.
-        if (!initial) await runDeferred();
+      const firstLaunch = (await storage.getItem(DEFERRED_FLAG).catch(() => null)) !== '1';
+      if (initial) {
+        // Opened by a link on first launch = the user's intent right now: no
+        // deferred check, but this open still counts as the install's first.
+        if (firstLaunch) await storage.setItem(DEFERRED_FLAG, '1');
+        await handleUrl(initial, 'closed', firstLaunch);
+      } else if (firstLaunch) {
+        // Marked done only once the engine answered: offline → next launch.
+        const e = await runDeferred(true);
+        if (e.reason !== 'network') await storage.setItem(DEFERRED_FLAG, '1');
       }
+      void flush();
     },
     onLink(cb) {
       for (const e of events) safely(cb, e);
@@ -239,7 +362,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       startListeners.add(cb);
       return () => startListeners.delete(cb);
     },
-    checkDeferred: runDeferred,
+    checkDeferred: () => runDeferred(false),
     async reportFingerprint() {
       const r = await rt();
       return (await call('POST', '/v1/debug/fingerprint', {
@@ -259,6 +382,10 @@ export function createStrait(config: CreateStraitConfig): Strait {
         return false;
       }
     },
+    async pendingOpenReports() {
+      return serial(async () => (await readQueue()).length);
+    },
+    flushOpenReports: () => flush(),
     stop() {
       for (const u of unsubs.splice(0)) u();
     },
