@@ -261,4 +261,15 @@ describe('first launch and the deferred check (B6/B7 revised)', () => {
     expect(engine.of('/v1/match')).toHaveLength(1);
     expect(engine.of('/v1/match')[0]!.body.openId).toBeUndefined();
   });
+  it('unreadable storage = already checked (no deferred jump); write failures never throw', async () => {
+    const broken: KeyValueStore = { getItem: async () => { throw new Error('io'); }, setItem: async () => { throw new Error('io'); } };
+    const engine = fakeEngine({ '/v1/match': NO_MATCH, '/v1/resolve': RESOLVED });
+    await make(fakeRuntime(), engine, broken as any).strait.start();
+    expect(engine.of('/v1/match')).toHaveLength(0);
+    const writeOnly: KeyValueStore = { getItem: async () => null, setItem: async () => { throw new Error('full'); } };
+    const e2 = fakeEngine({ '/v1/match': NO_MATCH });
+    await expect(make(fakeRuntime(), e2, writeOnly as any).strait.start()).resolves.toBeUndefined();
+    const e3 = fakeEngine({ '/v1/resolve': RESOLVED });
+    await expect(make(fakeRuntime({ initialURL: 'https://links.test/sale' }), e3, writeOnly as any).strait.start()).resolves.toBeUndefined();
+  });
 });

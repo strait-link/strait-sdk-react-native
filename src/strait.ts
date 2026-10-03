@@ -340,16 +340,19 @@ export function createStrait(config: CreateStraitConfig): Strait {
         r.onURL((u) => void handleUrl(u, tracker.classify(r.now()))),
       );
       const initial = await r.getInitialURL().catch(() => null);
-      const firstLaunch = (await storage.getItem(DEFERRED_FLAG).catch(() => null)) !== '1';
+      // Unreadable storage counts as "already checked": never risk a stale
+      // deferred jump on every launch. Write failures are ignored (never throw).
+      const firstLaunch = (await storage.getItem(DEFERRED_FLAG).catch(() => '1')) !== '1';
+      const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
       if (initial) {
         // Opened by a link on first launch = the user's intent right now: no
         // deferred check, but this open still counts as the install's first.
-        if (firstLaunch) await storage.setItem(DEFERRED_FLAG, '1');
+        if (firstLaunch) await markChecked();
         await handleUrl(initial, 'closed', firstLaunch);
       } else if (firstLaunch) {
         // Marked done only once the engine answered: offline → next launch.
         const e = await runDeferred(true);
-        if (e.reason !== 'network') await storage.setItem(DEFERRED_FLAG, '1');
+        if (e.reason !== 'network') await markChecked();
       }
       void flush();
     },
