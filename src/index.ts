@@ -10,7 +10,7 @@ export { computeSignature, h32 } from './signature.js';
 
 export interface StraitConfig {
   /**
-   * Your workspace's publishable key (`bk_pub_live_…`), from Dashboard →
+   * Your workspace's publishable key (`st_pub_live_…`), from Dashboard →
    * Get started. Safe to ship in apps/websites — never use the secret key here.
    */
   publishableKey: string;

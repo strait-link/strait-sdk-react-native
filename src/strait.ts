@@ -82,7 +82,7 @@ export interface LinkStart {
 }
 
 export interface CreateStraitConfig {
-  /** Workspace publishable key (bk_pub_live_…), Dashboard → Get started. */
+  /** Workspace publishable key (st_pub_live_…), Dashboard → Get started. */
   publishableKey: string;
   /** Your Strait link host, e.g. https://go.yourbrand.com */
   endpoint: string;

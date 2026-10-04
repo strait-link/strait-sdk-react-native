@@ -25,7 +25,7 @@ Call once after first launch and route to the result:
 import { resolveDeferredLink } from '@strait/sdk-react-native';
 
 const result = await resolveDeferredLink({
-  publishableKey: 'bk_pub_live_…',    // Dashboard → Get started (safe in apps; never the secret key)
+  publishableKey: 'st_pub_live_…',    // Dashboard → Get started (safe in apps; never the secret key)
   endpoint: 'https://go.yourbrand.com', // your Strait link host
 });
 
@@ -45,7 +45,7 @@ import { PlayInstallReferrer } from 'react-native-play-install-referrer';
 import { createStrait, fromPlayInstallReferrer } from '@strait/sdk-react-native';
 
 const strait = createStrait({
-  publishableKey: 'bk_pub_live_…',
+  publishableKey: 'st_pub_live_…',
   endpoint: 'https://go.yourbrand.com',
   storage: AsyncStorage,                                   // required for reliable analytics
   installReferrer: fromPlayInstallReferrer(PlayInstallReferrer),
