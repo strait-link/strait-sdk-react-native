@@ -1,7 +1,8 @@
 # @strait/sdk-react-native
 
 Deferred deep linking for React Native — the user taps your link, installs the
-app, and lands on the right screen. No clipboard paste banner.
+app, and lands on the right screen. No clipboard by default; an opt-in iPhone
+clipboard boost gives exact matches (contract B19).
 
 Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
 every other SDK via shared golden vectors (run in CI here).
@@ -17,7 +18,7 @@ npm install @strait/sdk-react-native
 Not on the npm registry yet. Until it is, install from GitHub (npm builds it on install):
 
 ```sh
-npm install github:bazingga08/strait-sdk-react-native#v0.7.3
+npm install github:bazingga08/strait-sdk-react-native#v0.8.0
 ```
 
 Android's exact deferred match also wants the Play Install Referrer native
@@ -102,11 +103,44 @@ yourself.
 |----------|--------|-----------|
 | Android  | Play Install Referrer (`strait_link`) | deterministic (`install_referrer`) |
 | Android (no referrer) / iOS | server-side device fingerprint | probabilistic (`exact_ext` → `exact_core`) |
+| iOS, clipboard boost on (opt-in) | one-time handoff link copied by the tap page | exact (`clipboard`) |
 
 The SDK collects only coarse, privacy-clean device fields (screen width, pixel
 ratio, 2-char language, timezone). The **server** adds the IP it observes and
 computes the signature — the client never sends an IP, and the signature is
 never a cross-app identity.
+
+How iPhone install matching works, what is kept (IP only as a keyed hash, for 1 hour)
+and the App Store privacy label to use: https://straitlink.in/docs/iphone-install-matching/ .
+A workspace can switch iPhone install matching off in Dashboard → Settings → "iPhone
+install matching"; iPhone installs then open your app's home screen.
+
+### iPhone: the clipboard boost (optional, contract B19)
+
+Off by default: the SDK never touches the clipboard unless you set
+`clipboardBoost: true` **and** pass a clipboard adapter. Also turn on Dashboard →
+Settings → "Clipboard boost", so the tap page's "Get the app" button copies a
+one-time link (`https://<your-handle>.strait.link/h/<token>`, single use, 24 h).
+
+```ts
+import * as Clipboard from 'expo-clipboard';
+import { createStrait, fromExpoClipboard } from '@strait/sdk-react-native';
+
+const strait = createStrait({
+  publishableKey, endpoint,
+  clipboardBoost: true,
+  clipboard: fromExpoClipboard(Clipboard), // or { hasProbableWebUrl, readText } from @react-native-clipboard/clipboard
+});
+```
+
+On the first launch only (iOS only), the SDK asks the adapter whether the clipboard
+probably holds a URL (`hasUrlAsync`, iOS `hasURLs`: **no prompt**). Only if it does
+does it read the text, and **iOS then shows its "Allow Paste" prompt**. If the text is
+a Strait handoff link, the SDK sends just its token to `POST /v1/handoff/claim` for an
+exact match (`route: 'clipboard'`); anything else never leaves the phone, and the SDK
+falls back to normal matching. To avoid the prompt, show Apple's Paste button
+(`UIPasteControl` / SwiftUI `PasteButton`, e.g. through a small native view) and pass
+what it pastes to `strait.claimHandoff(text)`.
 
 ### Android: enabling the deterministic path
 

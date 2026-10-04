@@ -8,6 +8,7 @@ import {
   staleTap,
   newOpenId,
   normalizeLinkHosts,
+  parseHandoffUrl,
   parseStraitClick,
   parseStraitLink,
   pruneOpenQueue,
@@ -17,7 +18,24 @@ import {
   splitUrl,
 } from './core.js';
 
-export { browserScreenWidth, portraitScreenWidth, splitUrl } from './core.js';
+export { browserScreenWidth, portraitScreenWidth, splitUrl, parseHandoffUrl } from './core.js';
+
+/**
+ * Clipboard access for the iPhone clipboard boost (contract B19), supplied by
+ * the app (e.g. expo-clipboard or @react-native-clipboard/clipboard). Strait
+ * never calls it unless `clipboardBoost: true`.
+ */
+export interface ClipboardAccess {
+  /**
+   * Without any prompt: does the clipboard probably hold a web URL? On iOS use
+   * UIPasteboard detectPatterns(.probableWebURL) or hasURLs (expo-clipboard
+   * `hasUrlAsync`, @react-native-clipboard `hasURL`), which do not show the
+   * paste prompt.
+   */
+  hasProbableWebUrl(): Promise<boolean>;
+  /** Read the clipboard text. On iOS this shows the system "Allow Paste" prompt. */
+  readText(): Promise<string | null>;
+}
 
 /**
  * Everything the SDK needs from the phone, behind one interface so the logic
@@ -50,9 +68,10 @@ export interface LinkEvent {
   /**
    * app_link: verified https link opened the app directly ·
    * custom_scheme: a browser handed off to the app (yourapp://…) ·
-   * install_referrer / fingerprint: how a deferred link was found.
+   * install_referrer / fingerprint / clipboard: how a deferred link was found
+   * (clipboard = an exact match from the clipboard boost, B19).
    */
-  route: 'app_link' | 'custom_scheme' | 'install_referrer' | 'fingerprint';
+  route: 'app_link' | 'custom_scheme' | 'install_referrer' | 'fingerprint' | 'clipboard';
   /** What the app was doing when the link arrived. */
   appState: 'closed' | 'background' | 'foreground';
   matched: boolean;
@@ -94,6 +113,15 @@ export interface CreateStraitConfig {
   storage?: KeyValueStore;
   /** Android: returns the Play Install Referrer. See `fromPlayInstallReferrer`. */
   installReferrer?: () => Promise<string | null>;
+  /**
+   * iPhone clipboard boost (contract B19), default false. When true, the first
+   * launch checks the clipboard (via `clipboard`) for the one-time link the tap
+   * page copied, for an exact match. Reading it shows iOS's paste prompt. Needs
+   * the workspace's "Clipboard boost" setting on. Never touched when false.
+   */
+  clipboardBoost?: boolean;
+  /** Clipboard access for `clipboardBoost` (see ClipboardAccess). */
+  clipboard?: ClipboardAccess;
   /** Tests / custom platforms. */
   runtime?: StraitRuntime;
   fetch?: typeof fetch;
@@ -106,8 +134,14 @@ export interface Strait {
   onLink(cb: (event: LinkEvent) => void): () => void;
   /** A link just arrived and is being resolved (for a loading state). */
   onLinkStart(cb: (start: LinkStart) => void): () => void;
-  /** Re-run the deferred check now (debugging); doesn't touch the once-per-install flag. */
+  /** Re-run the deferred check now (debugging); doesn't touch the once-per-install flag or the clipboard. */
   checkDeferred(): Promise<LinkEvent>;
+  /**
+   * Claim a clipboard-boost handoff link the app got itself, e.g. from Apple's
+   * Paste button (no prompt; contract B19). Text that is not a Strait handoff
+   * link gives `matched:false, reason:'not_handoff'` without a network call.
+   */
+  claimHandoff(text: string): Promise<LinkEvent>;
   /** Send this app's fingerprint to the engine (debug comparison with the browser). */
   reportFingerprint(): Promise<unknown>;
   /** Engine's comparison of the app and browser fingerprints on this network. */
@@ -158,6 +192,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
   let runtime: StraitRuntime | undefined = config.runtime;
   const tracker = new AppStateTracker();
   const startListeners = new Set<(s: LinkStart) => void>();
+  let isFirstLaunch = false;
 
   const rt = async (): Promise<StraitRuntime> =>
     (runtime ??= await createReactNativeRuntime({ installReferrer: config.installReferrer }));
@@ -335,6 +370,23 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return res;
     };
     try {
+      // B19: the clipboard boost, only on the once-per-install iPhone check.
+      if (record && config.clipboardBoost === true && config.clipboard && r.platform() === 'ios') {
+        const token = await handoffToken(config.clipboard);
+        if (token) {
+          const { json } = await answered('/v1/handoff/claim', {
+            publishableKey: config.publishableKey, token, platform: 'ios', ...tag,
+          });
+          if (json.matched === true) {
+            noteTap(replyClickId(json.clickId), t0);
+            return emit(id, {
+              kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
+              ...destination(json.longUrl), linkId: json.linkId, ms: r.now() - t0, at: t0,
+            });
+          }
+          // Not claimable: carry on with signal matching (same openId).
+        }
+      }
       if (r.platform() === 'android') {
         const referrer = await r.getInstallReferrer().catch(() => null);
         const linkId = parseStraitLink(referrer);
@@ -366,6 +418,43 @@ export function createStrait(config: CreateStraitConfig): Strait {
     }
   }
 
+  /** B19 steps 1–3: detect (no prompt) → read only if a URL is likely → parse. Never throws. */
+  async function handoffToken(clip: ClipboardAccess): Promise<string | null> {
+    try {
+      if (!(await clip.hasProbableWebUrl())) return null;
+      return parseHandoffUrl(await clip.readText(), linkHosts);
+    } catch {
+      return null;
+    }
+  }
+
+  async function claimHandoff(text: string): Promise<LinkEvent> {
+    const r = await rt();
+    const t0 = r.now();
+    const id = newId(t0);
+    const token = parseHandoffUrl(text, linkHosts);
+    if (!token) {
+      return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'not_handoff', ms: 0, at: t0 });
+    }
+    announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
+    try {
+      const res = await call('POST', '/v1/handoff/claim', {
+        publishableKey: config.publishableKey, token, platform: r.platform(), openId: id, at: t0, firstLaunch: isFirstLaunch,
+      });
+      if (shouldRetryReport(res.status)) throw new Error(`HTTP ${res.status}`);
+      const json = res.json;
+      const matched = json.matched === true;
+      if (matched) noteTap(replyClickId(json.clickId), t0);
+      return emit(id, {
+        kind: 'deferred', route: 'clipboard', appState: 'closed', matched,
+        reason: matched ? undefined : json.reason ?? json.error ?? 'no_match',
+        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ms: r.now() - t0, at: t0,
+      });
+    } catch {
+      return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
+    }
+  }
+
   return {
     async start() {
       const r = await rt();
@@ -381,6 +470,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       // Unreadable storage counts as "already checked": never risk a stale
       // deferred jump on every launch. Write failures are ignored (never throw).
       const firstLaunch = (await storage.getItem(DEFERRED_FLAG).catch(() => '1')) !== '1';
+      isFirstLaunch = firstLaunch;
       const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
       if (initial) {
         // Opened by a link on first launch = the user's intent right now: no
@@ -404,6 +494,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return () => startListeners.delete(cb);
     },
     checkDeferred: () => runDeferred(false),
+    claimHandoff,
     async reportFingerprint() {
       const r = await rt();
       return (await call('POST', '/v1/debug/fingerprint', {
@@ -453,6 +544,22 @@ export function fromPlayInstallReferrer(mod: {
         resolve(null);
       }
     });
+}
+
+/**
+ * Wrap `expo-clipboard` for `clipboard` (contract B19):
+ *   import * as Clipboard from 'expo-clipboard';
+ *   createStrait({ …, clipboardBoost: true, clipboard: fromExpoClipboard(Clipboard) })
+ * `hasUrlAsync` uses iOS's hasURLs (no prompt); `getStringAsync` shows the paste prompt.
+ */
+export function fromExpoClipboard(mod: {
+  hasUrlAsync(): Promise<boolean>;
+  getStringAsync(): Promise<string>;
+}): ClipboardAccess {
+  return {
+    hasProbableWebUrl: () => mod.hasUrlAsync(),
+    readText: async () => (await mod.getStringAsync()) || null,
+  };
 }
 
 /** The real runtime, backed by React Native's Linking, AppState and Dimensions. */

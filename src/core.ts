@@ -5,7 +5,7 @@
  */
 
 /** How the app received a link. */
-export type LinkRoute = 'app_link' | 'custom_scheme' | 'install_referrer' | 'fingerprint';
+export type LinkRoute = 'app_link' | 'custom_scheme' | 'install_referrer' | 'fingerprint' | 'clipboard';
 /** What the app was doing when the link arrived. */
 export type AppStateAtLink = 'closed' | 'background' | 'foreground';
 
@@ -253,6 +253,30 @@ export function replyClickId(reply: unknown, fallback?: string | null): string |
   if (typeof reply === 'string' && CLICK_ID.test(reply)) return reply.toLowerCase();
   if (typeof fallback === 'string' && CLICK_ID.test(fallback)) return fallback.toLowerCase();
   return null;
+}
+
+/** A clipboard-boost handoff token as the tap page mints it: 128 random bits, base64url (contract B19). */
+const HANDOFF_TOKEN = /^[A-Za-z0-9_-]{22}$/;
+
+/**
+ * The handoff token inside text read from the clipboard (contract B19), or
+ * null. Only a Strait handoff link counts: `https://<link host>/h/<token>`,
+ * where the host is one of this app's link hosts (`normalizeLinkHosts`), the
+ * path is exactly `/h/<22 base64url chars>` (one trailing slash allowed), and
+ * the whole text (trimmed) is that one URL. A query or fragment after it is
+ * ignored. Anything else, including http, another host, a look-alike host or
+ * user info, gives null, and the SDK then sends nothing about the clipboard.
+ */
+export function parseHandoffUrl(text: string | null | undefined, linkHosts: string[]): string | null {
+  if (typeof text !== 'string') return null;
+  const s = text.trim();
+  if (!s || s.length > 2048) return null;
+  // Scheme and host compare case-insensitively; the path '/h/' and the token are case-sensitive.
+  const m = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#\s]+)\/h\/([^/?#\s]*)\/?(?:[?#]\S*)?$/.exec(s);
+  if (!m || m[1]!.toLowerCase() !== 'https') return null;
+  const host = m[2]!.toLowerCase();
+  if (!linkHosts.some((h) => h.toLowerCase() === host)) return null;
+  return HANDOFF_TOKEN.test(m[3]!) ? m[3]! : null;
 }
 
 /** Whether a failed report should be kept for retry: no answer, 429 or 5xx. */

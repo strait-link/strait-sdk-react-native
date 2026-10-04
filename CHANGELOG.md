@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+- Optional iPhone clipboard boost (shared-spec/SDK-CONTRACT.md B19). New config
+  `clipboardBoost` (default **false**) and `clipboard` (an adapter; `fromExpoClipboard`
+  wraps expo-clipboard). With it on, the first iPhone launch checks without a prompt
+  whether the clipboard probably holds a URL, reads it only then (iOS shows its paste
+  prompt), and claims a Strait handoff token via `POST /v1/handoff/claim` for an exact
+  match (`LinkEvent.route: 'clipboard'`); otherwise it falls back to normal matching
+  with the same open id. The clipboard is never touched when the option is off, on
+  Android, after the first launch, or by the debug `checkDeferred()`.
+- New `strait.claimHandoff(text)` for apps that use Apple's Paste button.
+- New core export: `parseHandoffUrl(text, linkHosts)` (conformance vectors v7).
+
 ## 0.7.3
 
 - Privacy hardening (shared-spec/SDK-CONTRACT.md B18): the URL sent with open reports
