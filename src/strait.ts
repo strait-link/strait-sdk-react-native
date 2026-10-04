@@ -84,7 +84,7 @@ export interface LinkStart {
 export interface CreateStraitConfig {
   /** Workspace publishable key (st_pub_live_…), Dashboard → Get started. */
   publishableKey: string;
-  /** Your Strait link host, e.g. https://go.yourbrand.com */
+  /** Your Strait link host, e.g. https://<your-handle>.strait.link */
   endpoint: string;
   /** Extra hosts that serve your short links (custom domains). */
   linkHosts?: string[];

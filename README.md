@@ -3,8 +3,8 @@
 Deferred deep linking for React Native — the user taps your link, installs the
 app, and lands on the right screen. No clipboard paste banner.
 
-Part of [Strait](../). The match signature stays in lockstep with the server and
-every other SDK via [`shared-spec`](../shared-spec) golden vectors (run in CI here).
+Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
+every other SDK via shared golden vectors (run in CI here).
 
 ## Install
 
@@ -32,7 +32,7 @@ import { resolveDeferredLink } from '@strait/sdk-react-native';
 
 const result = await resolveDeferredLink({
   publishableKey: 'st_pub_live_…',    // Dashboard → Get started (safe in apps; never the secret key)
-  endpoint: 'https://go.yourbrand.com', // your Strait link host
+  endpoint: 'https://<your-handle>.strait.link', // your workspace's link domain
 });
 
 if (result.matched && result.longUrl) {
@@ -52,7 +52,7 @@ import { createStrait, fromPlayInstallReferrer } from '@strait/sdk-react-native'
 
 const strait = createStrait({
   publishableKey: 'st_pub_live_…',
-  endpoint: 'https://go.yourbrand.com',
+  endpoint: 'https://<your-handle>.strait.link',
   storage: AsyncStorage,                                   // required for reliable analytics
   installReferrer: fromPlayInstallReferrer(PlayInstallReferrer),
 });
@@ -71,7 +71,7 @@ Every time a link opens the app, the SDK reports it once (contract B14):
 | Browser handed off to the app (`yourapp://…`) | `/v1/open` | the exact tap (`strait_click`, removed before your app sees the URL) |
 | First open after a Play install | `/v1/referrer` | the exact tap that sent the user to the store |
 | First open after an App Store install | `/v1/match` | the matched tap |
-| Your own https links | `/v1/open` | host + path only (never the query) |
+| Your own https links | `/v1/open` | the URL (tap id removed); the server keeps host + path only, never the query |
 
 Reports that can't be sent (offline, server busy) are saved in `storage` and
 retried on the next start and whenever the app returns to the foreground, for

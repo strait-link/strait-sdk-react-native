@@ -14,7 +14,7 @@ export interface StraitConfig {
    * Get started. Safe to ship in apps/websites — never use the secret key here.
    */
   publishableKey: string;
-  /** The Strait link host, e.g. https://go.yourbrand.com. */
+  /** The Strait link host, e.g. https://<your-handle>.strait.link. */
   endpoint: string;
   /** Override the native adapter (tests / custom platforms). */
   adapter?: NativeAdapter;
