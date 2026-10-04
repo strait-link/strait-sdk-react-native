@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AppStateTracker, browserScreenWidth, portraitScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
-  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId,
+  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap,
   ATTRIBUTION_WINDOW_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
 
@@ -18,6 +18,12 @@ describe('conformance vectors', () => {
   });
   it.each(v.replyClickId)('replyClickId: $name', ({ reply, fallback, expected }) => {
     expect(replyClickId(reply, fallback)).toBe(expected);
+  });
+  it.each(v.reportUrl)('reportUrl($input)', ({ input, expected }) => {
+    expect(reportUrl(input)).toBe(expected);
+  });
+  it.each(v.staleTap)('staleTap: $name', ({ stored, now, expected }) => {
+    expect(staleTap(stored, now)).toBe(expected);
   });
   it.each(v.screenWidth)('browserScreenWidth($logical)', ({ logical, expected }) => {
     expect(browserScreenWidth(logical)).toBe(expected);

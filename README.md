@@ -71,11 +71,12 @@ Every time a link opens the app, the SDK reports it once (contract B14):
 | Browser handed off to the app (`yourapp://…`) | `/v1/open` | the exact tap (`strait_click`, removed before your app sees the URL) |
 | First open after a Play install | `/v1/referrer` | the exact tap that sent the user to the store |
 | First open after an App Store install | `/v1/match` | the matched tap |
-| Your own https links | `/v1/open` | the URL (tap id removed); the server keeps host + path only, never the query |
+| Your own https links | `/v1/open` | the URL's host + path (and `utm_source`, for the channel) |
 
 Reports that can't be sent (offline, server busy) are saved in `storage` and
 retried on the next start and whenever the app returns to the foreground, for
-up to 7 days (max 100). The engine de-duplicates by open id, so nothing is
+up to 7 days (max 100). Reports and the saved queue never contain the query string
+or fragment of the opened URL, only host + path and `utm_source` (contract B18). The engine de-duplicates by open id, so nothing is
 counted twice. Navigation never waits for a report. The first launch of an
 install is marked as such, so dashboards can tell **new users** (installed and
 opened) from **existing users** (already had the app). The deferred check is

@@ -82,7 +82,7 @@ describe('browser hand-off (custom scheme) with a tap id', () => {
     expect(engine.of('/v1/open')).toHaveLength(1);
     expect(engine.of('/v1/open')[0]!.body).toMatchObject({
       publishableKey: PK, openId: e.id, kind: 'direct', route: 'custom_scheme', appState: 'background',
-      platform: 'android', url: 'https://shop.example/p/42?color=red', clickId: CLICK, matched: true, firstLaunch: false,
+      platform: 'android', url: 'https://shop.example/p/42', clickId: CLICK, matched: true, firstLaunch: false, // B18: no query
     });
   });
   it('navigation never waits for the report', async () => {
@@ -199,6 +199,81 @@ describe('the retry queue', () => {
     for (let i = 0; i < 5; i++) rt.tap(`straitlink://a.b/${i}`);
     await settle();
     expect(new Set(events.map((e) => e.id)).size).toBe(5);
+  });
+});
+
+describe('B18: no query or fragment leaves the device or reaches storage', () => {
+  const TAP_KEY = 'strait.lastTap';
+  it('the /v1/open report keeps only host, path and utm_source; the app still gets the full URL', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({ '/v1/open': ACCEPTED });
+    const { strait, events } = make(rt, engine, returning());
+    await strait.start();
+    rt.tap('https://shop.example/p/42?email=jo%40x.com&utm_source=sms#reset-token');
+    await settle();
+    expect(events.at(-1)!).toMatchObject({ url: 'https://shop.example/p/42?email=jo%40x.com&utm_source=sms#reset-token', params: { email: 'jo@x.com', utm_source: 'sms' } });
+    expect(engine.of('/v1/open')[0]!.body.url).toBe('https://shop.example/p/42?utm_source=sms');
+  });
+  it('a failed short-link lookup is queued and resolved without its query or fragment', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({ '/v1/resolve': 'offline', '/v1/open': 'offline' });
+    const { strait, storage } = make(rt, engine, returning());
+    await strait.start();
+    rt.tap('https://links.test/sale?session=s3cr3t&utm_source=wa#frag');
+    await settle();
+    expect(engine.of('/v1/resolve')[0]!.body.url).toBe('https://links.test/sale?utm_source=wa');
+    const saved = storage.data.get('strait.pendingOpens')!;
+    expect(saved).not.toContain('s3cr3t');
+    expect(JSON.parse(saved)[0].url).toBe('https://links.test/sale?utm_source=wa');
+  });
+  it('reports saved by an older SDK are stripped before they are sent or saved again', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({ '/v1/open': 'offline' });
+    const storage = returning();
+    storage.data.set('strait.pendingOpens', JSON.stringify([
+      { openId: 'o_old_aaaaaaaaaaaa', kind: 'direct', route: 'app_link', appState: 'closed', platform: 'android', url: 'https://shop.example/p?token=abc#x', matched: true, firstLaunch: false, at: 1_800_000_000_000 - 1000 },
+    ]));
+    const { strait } = make(rt, engine, storage);
+    await strait.start();
+    await strait.flushOpenReports();
+    expect(engine.of('/v1/open')[0]!.body.url).toBe('https://shop.example/p');
+    expect(storage.data.get('strait.pendingOpens')).not.toContain('token');
+  });
+  it('an expired remembered tap is deleted at start, not only ignored', async () => {
+    const rt = fakeRuntime();
+    const storage = returning();
+    storage.data.set(TAP_KEY, JSON.stringify({ clickId: CLICK, at: 1_800_000_000_000 - 8 * 24 * 3600 * 1000 }));
+    const { strait } = make(rt, fakeEngine({}), storage);
+    await strait.start();
+    await settle();
+    expect(storage.data.get(TAP_KEY)).toBe('');
+  });
+  it('a tap that expires while the app runs is deleted by trackEvent and not sent', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({ '/v1/event': ACCEPTED });
+    const storage = returning();
+    storage.data.set(TAP_KEY, JSON.stringify({ clickId: CLICK, at: 1_800_000_000_000 }));
+    const { strait } = make(rt, engine, storage);
+    await strait.start();
+    await settle();
+    expect(storage.data.get(TAP_KEY)).toContain(CLICK); // still valid at start
+    rt.advance(7 * 24 * 3600 * 1000 + 1);
+    await strait.trackEvent('purchase');
+    await settle();
+    expect(engine.of('/v1/event')[0]!.body.clickId).toBeUndefined();
+    expect(storage.data.get(TAP_KEY)).toBe('');
+  });
+  it('a valid remembered tap is kept and sent', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({ '/v1/event': ACCEPTED });
+    const storage = returning();
+    storage.data.set(TAP_KEY, JSON.stringify({ clickId: CLICK, at: 1_800_000_000_000 - 1000 }));
+    const { strait } = make(rt, engine, storage);
+    await strait.start();
+    await strait.trackEvent('purchase');
+    await settle();
+    expect(engine.of('/v1/event')[0]!.body.clickId).toBe(CLICK);
+    expect(storage.data.get(TAP_KEY)).toContain(CLICK);
   });
 });
 

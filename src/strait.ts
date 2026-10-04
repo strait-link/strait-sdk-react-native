@@ -4,6 +4,8 @@ import {
   portraitScreenWidth,
   classifyUrl,
   eventClickId,
+  reportUrl,
+  staleTap,
   newOpenId,
   normalizeLinkHosts,
   parseStraitClick,
@@ -200,6 +202,15 @@ export function createStrait(config: CreateStraitConfig): Strait {
     tapWrite = tapWrite.then(() => storage.setItem(TAP_KEY, value)).catch(() => undefined);
   };
   const noteTap = (clickId: string | null | undefined, at: number) => setTap(clickId ? rememberTap(clickId, at) : '');
+  /** B18: delete an expired remembered tap instead of only ignoring it. Re-read
+   *  inside the write chain so a newer tap written meanwhile is never lost. */
+  const dropStaleTap = (now: number) => {
+    tapWrite = tapWrite
+      .then(async () => {
+        if (staleTap(await storage.getItem(TAP_KEY), now)) await storage.setItem(TAP_KEY, '');
+      })
+      .catch(() => undefined);
+  };
 
   // ── Open reports (B14): every open is reported once; failures are saved and
   // retried. Queue operations run one at a time (storage is async).
@@ -212,7 +223,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const readQueue = async (): Promise<OpenReport[]> => {
     try {
       const v = JSON.parse((await storage.getItem(QUEUE_KEY)) ?? '[]');
-      return Array.isArray(v) ? v : [];
+      // B18: reports saved by an older SDK may hold a full URL; strip it here
+      // so the next write leaves no query or fragment on the device.
+      return Array.isArray(v) ? v.map((rep) => (typeof rep?.url === 'string' ? { ...rep, url: reportUrl(rep.url) } : rep)) : [];
     } catch {
       return [];
     }
@@ -272,10 +285,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
     if (c.needsResolve) {
       // The lookup is also the open report (openId); the engine says whether
       // it recorded it, and anything short of that is retried via /v1/open.
-      const base: OpenReport = { openId: id, kind: 'direct', route: 'app_link', appState, platform, url: raw, matched: false, firstLaunch, at: t0 };
+      // B18: only host + path (+ utm_source) leave the device or reach storage.
+      const base: OpenReport = { openId: id, kind: 'direct', route: 'app_link', appState, platform, url: reportUrl(raw), matched: false, firstLaunch, at: t0 };
       try {
         const { json } = await call('POST', '/v1/resolve', {
-          publishableKey: config.publishableKey, url: raw, platform, openId: id, appState, firstLaunch, at: t0,
+          publishableKey: config.publishableKey, url: base.url, platform, openId: id, appState, firstLaunch, at: t0,
         });
         const matched = json.matched === true;
         const reason = matched ? undefined : json.reason ?? json.error;
@@ -294,7 +308,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     if (c.clickId) noteTap(c.clickId, t0);
     // Navigation never waits for the report.
     void report({
-      openId: id, kind: 'direct', route: c.route, appState, platform, url: c.url,
+      openId: id, kind: 'direct', route: c.route, appState, platform, url: reportUrl(c.url),
       clickId: c.clickId ?? undefined, matched: true, firstLaunch, at: t0,
     });
     return emit(id, {
@@ -355,6 +369,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
   return {
     async start() {
       const r = await rt();
+      dropStaleTap(r.now());
       unsubs.push(
         r.onAppState((s) => {
           tracker.onState(s, r.now());
@@ -403,6 +418,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       try {
         await tapWrite;
         const stored = await storage.getItem(TAP_KEY).catch(() => null);
+        if (staleTap(stored, r.now())) dropStaleTap(r.now());
         const clickId = eventClickId(stored, r.now(), extra.clickId) ?? undefined;
         return (await call('POST', '/v1/event', {
           publishableKey: config.publishableKey, event: name, platform: r.platform(), ...extra, clickId,

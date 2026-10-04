@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.3
+
+- Privacy hardening (shared-spec/SDK-CONTRACT.md B18): the URL sent with open reports
+  (`/v1/open`, `/v1/resolve`) and saved in the offline queue (`strait.pendingOpens`)
+  no longer carries the query string or fragment. Only the first `utm_source` pair is
+  kept, because the engine uses it for channel attribution; the engine already stored
+  host + path only, so analytics are unchanged. Reports queued by an older version are
+  stripped the next time the queue is read. Your app's `LinkEvent` (`rawUrl`, `url`,
+  `params`) is unchanged.
+- An expired remembered tap id (`strait.lastTap`, older than 7 days) is now deleted at
+  `start()` and by `trackEvent`, instead of only being ignored.
+- New core exports: `reportUrl`, `staleTap` (conformance vectors v6).
+
 ## 0.7.2
 
 - Installable straight from GitHub: `npm install github:bazingga08/strait-sdk-react-native#v0.7.2`.
