@@ -82,11 +82,12 @@ retried on the next launch.
 await strait.trackEvent('purchase', { value: 49.99, currency: 'USD' });
 ```
 
-The event carries the tap id of the last link open that had one (a browser
-hand-off or a Play install) for 7 days, so the dashboard can place the revenue
-on that tap's channel and A/B variant (contract B15). A newer open by a
-verified short link replaces it (its tap id isn't known to the app, so the
-event then carries none). Pass `clickId` to set it yourself.
+The event carries the tap id of the last attributed link open for 7 days, so
+the dashboard can place the revenue on that tap's channel and A/B variant
+(contracts B15/B16). Every attributed open supplies one: a browser hand-off,
+a Play install, or (B16) the engine's reply to a verified short link or a
+deferred match. A newer open replaces the older tap. Pass `clickId` to set it
+yourself.
 
 ## How it matches
 

@@ -202,6 +202,19 @@ export function eventClickId(stored: string | null | undefined, now: number, exp
   return age >= 0 && age <= ATTRIBUTION_WINDOW_MS ? clickId.toLowerCase() : null;
 }
 
+/**
+ * The tap id to remember after an attributed open the engine answered
+ * (contract B16): the reply's `clickId` when it is a valid tap id
+ * (lower-cased); else `fallback` when valid (a tap id the SDK already knew,
+ * e.g. the Play referrer's — so an older engine that returns none keeps B15);
+ * else null, which forgets the remembered tap (the newer touch wins).
+ */
+export function replyClickId(reply: unknown, fallback?: string | null): string | null {
+  if (typeof reply === 'string' && CLICK_ID.test(reply)) return reply.toLowerCase();
+  if (typeof fallback === 'string' && CLICK_ID.test(fallback)) return fallback.toLowerCase();
+  return null;
+}
+
 /** Whether a failed report should be kept for retry: no answer, 429 or 5xx. */
 export function shouldRetryReport(status: number | null): boolean {
   return status === null || status === 429 || status >= 500;

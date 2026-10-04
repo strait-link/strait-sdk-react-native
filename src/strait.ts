@@ -10,6 +10,7 @@ import {
   parseStraitLink,
   pruneOpenQueue,
   rememberTap,
+  replyClickId,
   shouldRetryReport,
   splitUrl,
 } from './core.js';
@@ -189,10 +190,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
     return { ok: res.ok, status: res.status, json: json as Record<string, any> };
   };
 
-  // ── Remembered tap (B15): the tap id of the last attributed link open, sent
-  // with conversion events. An attributed open without a known tap id (short
-  // link, fingerprint match) forgets it: the newer touch wins. Writes are
-  // chained so a trackEvent right after an open sees it; failures are ignored.
+  // ── Remembered tap (B15/B16): the tap id of the last attributed link open,
+  // sent with conversion events. Short links and deferred matches learn it
+  // from the engine's reply (B16); an attributed open without a known tap id
+  // forgets it: the newer touch wins. Writes are chained so a trackEvent right
+  // after an open sees it; failures are ignored.
   let tapWrite: Promise<unknown> = Promise.resolve();
   const setTap = (value: string) => {
     tapWrite = tapWrite.then(() => storage.setItem(TAP_KEY, value)).catch(() => undefined);
@@ -277,7 +279,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         });
         const matched = json.matched === true;
         const reason = matched ? undefined : json.reason ?? json.error;
-        if (matched) noteTap(null, t0);
+        if (matched) noteTap(replyClickId(json.clickId), t0);
         if (json.recorded !== true) void report({ ...base, matched, reason, linkId: json.linkId });
         return emit(id, {
           kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason,
@@ -328,7 +330,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
             publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag,
           });
           if (json.matched) {
-            if (record) noteTap(clickId, t0);
+            if (record) noteTap(replyClickId(json.clickId, clickId), t0);
             return emit(id, {
               kind: 'deferred', route: 'install_referrer', appState: 'closed', matched: true,
               ...destination(json.longUrl), linkId: json.linkId ?? linkId, ms: r.now() - t0, at: t0,
@@ -339,7 +341,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       const { json } = await answered('/v1/match', {
         publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag,
       });
-      if (record && json.matched === true) noteTap(null, t0);
+      if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0);
       return emit(id, {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),

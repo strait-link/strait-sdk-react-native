@@ -246,7 +246,7 @@ describe('fingerprint check + events', () => {
   });
 });
 
-describe('conversion events carry the tap id (B15)', () => {
+describe('conversion events carry the tap id (B15/B16)', () => {
   const TAP = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
   const OTHER = '11111111-2222-4333-8444-555555555555';
   const DAY = 24 * 60 * 60 * 1000;
@@ -299,9 +299,52 @@ describe('conversion events carry the tap id (B15)', () => {
     expect(eventBody(engine)?.clickId).toBe(TAP);
   });
 
-  it('a newer short-link open (tap id unknown) forgets the older tap', async () => {
+  it('a newer short-link open with no tap id in the reply (older engine) forgets the older tap', async () => {
     const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${TAP}` });
     const engine = fakeEngine({ ...resolved, '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const { strait } = start(rt, engine);
+    await strait.start();
+    rt.tap('https://links.test/sale');
+    await flush();
+    await flush();
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)).not.toHaveProperty('clickId');
+  });
+
+  it('B16: a short-link open remembers the tap id the engine returns, replacing the older tap', async () => {
+    const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${OTHER}` });
+    const engine = fakeEngine({ '/v1/resolve': { ...resolved['/v1/resolve'], recorded: true, clickId: TAP.toUpperCase() }, '/v1/event': { ok: true }, '/v1/open': { ok: true } });
+    const { strait, storage } = start(rt, engine);
+    await strait.start();
+    rt.advance(1000);
+    rt.tap('https://links.test/sale');
+    await flush();
+    await flush();
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)?.clickId).toBe(TAP);
+    expect(JSON.parse(storage.data.get('strait.lastTap')!)).toEqual({ clickId: TAP, at: 1_001_000 });
+  });
+
+  it('B16: a fingerprint match remembers the tap id the engine returns', async () => {
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/match': { matched: true, longUrl: 'https://shop.example/p/9', linkId: 'lnk_9', clickId: TAP } });
+    const { strait } = start(fakeRuntime(), engine);
+    await strait.start();
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)?.clickId).toBe(TAP);
+  });
+
+  it('B16: the referrer reply\'s tap id wins over the parsed one', async () => {
+    const rt = fakeRuntime({ referrer: `strait_link=lnk_7&strait_click=${OTHER}` });
+    const engine = fakeEngine({ '/v1/event': { ok: true }, '/v1/referrer': { matched: true, longUrl: 'https://shop.example/p/7', linkId: 'lnk_7', clickId: TAP } });
+    const { strait } = start(rt, engine);
+    await strait.start();
+    await strait.trackEvent('purchase');
+    expect(eventBody(engine)?.clickId).toBe(TAP);
+  });
+
+  it('B16: a malformed reply tap id counts as none (forgets)', async () => {
+    const rt = fakeRuntime({ initialURL: `straitlink://shop.example/p/42?strait_click=${TAP}` });
+    const engine = fakeEngine({ '/v1/resolve': { ...resolved['/v1/resolve'], clickId: 'nope' }, '/v1/event': { ok: true }, '/v1/open': { ok: true } });
     const { strait } = start(rt, engine);
     await strait.start();
     rt.tap('https://links.test/sale');

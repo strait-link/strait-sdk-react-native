@@ -114,6 +114,7 @@ export {
   shouldRetryReport,
   eventClickId,
   rememberTap,
+  replyClickId,
   ATTRIBUTION_WINDOW_MS,
   OPEN_QUEUE_MAX,
   OPEN_QUEUE_MAX_AGE_MS,
