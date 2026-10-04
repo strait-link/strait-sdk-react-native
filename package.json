@@ -1,6 +1,6 @@
 {
   "name": "@strait/sdk-react-native",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Deep linking for React Native: direct links (App Links, Universal Links, custom schemes), deferred links that survive the install (Play Install Referrer, iOS fingerprint match, no clipboard paste banner) and link-open analytics.",
   "keywords": [
     "react-native",
@@ -54,7 +54,7 @@
   },
   "scripts": {
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
-    "prepack": "npm run build",
+    "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "brand": "node scripts/brand.mjs"

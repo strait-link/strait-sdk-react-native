@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- Installable straight from GitHub: `npm install github:bazingga08/strait-sdk-react-native#v0.7.2`.
+  The build now runs as a `prepare` script (was `prepack`), so npm compiles `dist/`
+  when it installs from a git URL. No code changes.
+
 ## 0.7.1
 
 - Report the portrait screen width so a first launch in landscape still matches the tap
