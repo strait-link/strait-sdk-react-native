@@ -18,6 +18,16 @@ export function browserScreenWidth(logicalWidth: number): number {
   return Math.ceil(logicalWidth - 0.001);
 }
 
+/**
+ * The `screenWidth` device field (contract B17): the screen's SHORTER side, as a
+ * browser reports it. Safari's `screen.width` at the tap is the portrait width
+ * whatever the orientation, so an app first launched in landscape (844×390)
+ * still reports 390.
+ */
+export function portraitScreenWidth(logicalWidth: number, logicalHeight: number): number {
+  return browserScreenWidth(Math.min(logicalWidth, logicalHeight));
+}
+
 export interface SplitUrl {
   scheme: string;
   host: string;

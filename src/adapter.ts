@@ -2,7 +2,7 @@
  * Native bindings the SDK needs, behind an interface so the pure resolution
  * logic is testable in plain Node (no React Native runtime required).
  */
-import { browserScreenWidth } from './core.js';
+import { portraitScreenWidth } from './core.js';
 
 export interface DeviceFields {
   screenWidth: number;
@@ -35,9 +35,9 @@ export async function createReactNativeAdapter(): Promise<NativeAdapter> {
       return Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other';
     },
     collectDevice() {
-      const { width } = Dimensions.get('screen');
+      const { width, height } = Dimensions.get('screen');
       return {
-        screenWidth: browserScreenWidth(width),
+        screenWidth: portraitScreenWidth(width, height),
         pixelRatio: PixelRatio.get(),
         language: resolveLocale(rn),
         timezone: resolveTimezone(),
@@ -78,4 +78,4 @@ function resolveTimezone(): string {
   }
 }
 
-export { browserScreenWidth, parseStraitLink } from './core.js';
+export { browserScreenWidth, parseStraitLink, portraitScreenWidth } from './core.js';

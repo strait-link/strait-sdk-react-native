@@ -5,14 +5,14 @@
  */
 // @ts-expect-error optional peer dependency, present in React Native apps
 import { AppState, Dimensions, Linking, PixelRatio, Platform } from 'react-native';
-import { browserScreenWidth } from './adapter.js';
+import { portraitScreenWidth } from './core.js';
 import type { StraitRuntime } from './strait.js';
 
 export function nativeRuntime(opts: { installReferrer?: () => Promise<string | null> } = {}): StraitRuntime {
   return {
     platform: () => (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other'),
     collectDevice: () => ({
-      screenWidth: browserScreenWidth(Dimensions.get('screen').width),
+      screenWidth: portraitScreenWidth(Dimensions.get('screen').width, Dimensions.get('screen').height),
       pixelRatio: PixelRatio.get(),
       language: intl('locale', 'en'),
       timezone: intl('timeZone', 'XX'),

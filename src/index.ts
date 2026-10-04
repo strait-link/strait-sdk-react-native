@@ -107,6 +107,7 @@ export {
   normalizeLinkHosts,
   splitUrl,
   browserScreenWidth,
+  portraitScreenWidth,
   parseStraitClick,
   takeClickId,
   newOpenId,

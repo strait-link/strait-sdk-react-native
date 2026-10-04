@@ -389,3 +389,14 @@ describe('browserScreenWidth (match what the browser reports at the tap)', () =>
     expect(browserScreenWidth(390.0000001)).toBe(390);
   });
 });
+
+import { portraitScreenWidth } from '../src/strait.js';
+describe('portraitScreenWidth (B17: the shorter side, like Safari screen.width at the tap)', () => {
+  it('reports the portrait width when the app starts in landscape', () => {
+    expect(portraitScreenWidth(844, 390)).toBe(390);
+    expect(portraitScreenWidth(390, 844)).toBe(390);
+  });
+  it('rounds the shorter side like the browser (Android 1080px @ 2.625)', () => {
+    expect(portraitScreenWidth(2340 / 2.625, 1080 / 2.625)).toBe(412);
+  });
+});

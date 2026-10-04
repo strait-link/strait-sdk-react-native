@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  AppStateTracker, browserScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
+  AppStateTracker, browserScreenWidth, portraitScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
   pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId,
   ATTRIBUTION_WINDOW_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
@@ -21,6 +21,9 @@ describe('conformance vectors', () => {
   });
   it.each(v.screenWidth)('browserScreenWidth($logical)', ({ logical, expected }) => {
     expect(browserScreenWidth(logical)).toBe(expected);
+  });
+  it.each(v.portraitScreenWidth)('portraitScreenWidth($width, $height)', ({ width, height, expected }) => {
+    expect(portraitScreenWidth(width, height)).toBe(expected);
   });
   it.each(v.splitUrl)('splitUrl($input)', ({ input, expected }) => {
     expect(splitUrl(input)).toEqual(expected);

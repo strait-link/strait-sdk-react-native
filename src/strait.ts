@@ -1,7 +1,7 @@
 import type { DeviceFields } from './adapter.js';
 import {
   AppStateTracker,
-  browserScreenWidth,
+  portraitScreenWidth,
   classifyUrl,
   eventClickId,
   newOpenId,
@@ -15,7 +15,7 @@ import {
   splitUrl,
 } from './core.js';
 
-export { browserScreenWidth, splitUrl } from './core.js';
+export { browserScreenWidth, portraitScreenWidth, splitUrl } from './core.js';
 
 /**
  * Everything the SDK needs from the phone, behind one interface so the logic
@@ -449,7 +449,7 @@ export async function createReactNativeRuntime(
   return {
     platform: () => (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other'),
     collectDevice: () => ({
-      screenWidth: browserScreenWidth(Dimensions.get('screen').width),
+      screenWidth: portraitScreenWidth(Dimensions.get('screen').width, Dimensions.get('screen').height),
       pixelRatio: PixelRatio.get(),
       language: deviceLanguage(),
       timezone: deviceTimezone(),
