@@ -97,6 +97,21 @@ a Play install, or (B16) the engine's reply to a verified short link or a
 deferred match. A newer open replaces the older tap. Pass `clickId` to set it
 yourself.
 
+### Referral codes (preview, contract B21)
+
+When a deferred link's tap carried a referral code (the link's `referralCode`, or
+`?strait_ref=` on the tap), the deferred `LinkEvent` has it as `referralCode`:
+
+```ts
+strait.onLink((e) => {
+  if (e.kind === 'deferred' && e.referralCode) saveInviter(e.referralCode);
+});
+```
+
+It is absent when there is no code, no match, or the engine doesn't send one.
+Referrals are a preview and are not switched on yet; grant rewards from your server
+(the `referral.converted` webhook), not in the app.
+
 ## How it matches
 
 | Platform | Method | Precision |

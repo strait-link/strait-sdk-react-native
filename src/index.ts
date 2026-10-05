@@ -28,6 +28,8 @@ export interface MatchResult {
   longUrl?: string;
   linkId?: string;
   matchMethod: 'install_referrer' | 'exact_ext' | 'exact_core' | 'none';
+  /** When matched and the tap carried a referral code (preview, contract B21). */
+  referralCode?: string;
 }
 
 const NONE: MatchResult = { matched: false, matchMethod: 'none' };
@@ -119,6 +121,7 @@ export {
   eventClickId,
   rememberTap,
   replyClickId,
+  replyReferralCode,
   ATTRIBUTION_WINDOW_MS,
   OPEN_QUEUE_MAX,
   OPEN_QUEUE_MAX_AGE_MS,
