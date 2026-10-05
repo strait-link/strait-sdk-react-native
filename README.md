@@ -5,7 +5,7 @@ app, and lands on the right screen. No clipboard by default; an opt-in iPhone
 clipboard boost gives exact matches (contract B19).
 
 Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
-every other SDK via shared golden vectors (run in CI here).
+the other app SDKs via shared golden vectors (run in CI here).
 
 ## Install
 
@@ -21,8 +21,8 @@ Not on the npm registry yet. Until it is, install from GitHub (npm builds it on 
 npm install github:bazingga08/strait-sdk-react-native#v0.8.1
 ```
 
-Android's exact deferred match also wants the Play Install Referrer native
-module (optional but recommended) — see "Android" below.
+Android's exact deferred match also wants the Play Install Referrer
+(optional but recommended): see "Android" below.
 
 ## Use
 
@@ -69,7 +69,7 @@ Every time a link opens the app, the SDK reports it once (contract B14):
 | How the app opened | Reported via | Joined to |
 |---|---|---|
 | Verified link tapped in WhatsApp, Gmail, Messages… | `/v1/resolve` (the lookup is the report) | the link; also counted as a tap |
-| Browser handed off to the app (`yourapp://…`) | `/v1/open` | the exact tap (`strait_click`, removed before your app sees the URL) |
+| Browser handed off to the app (`yourapp://…`) | `/v1/open` | the exact tap (`strait_click`, removed from the event's `url`, `path` and `params`; `rawUrl` is the URL as the OS gave it) |
 | First open after a Play install | `/v1/referrer` | the exact tap that sent the user to the store |
 | First open after an App Store install | `/v1/match` | the matched tap |
 | Your own https links | `/v1/open` | the URL's host + path (and `utm_source`, for the channel) |
@@ -117,11 +117,12 @@ Referrals are a preview and are not switched on yet; grant rewards from your ser
 | Platform | Method | Precision |
 |----------|--------|-----------|
 | Android  | Play Install Referrer (`strait_link`) | deterministic (`install_referrer`) |
-| Android (no referrer) / iOS | server-side device fingerprint | probabilistic (`exact_ext` → `exact_core`) |
+| Android (no referrer) / iOS | server-side device fingerprint | probabilistic (`exact_ext` → `exact_core`; on iOS also `scored` when the workspace uses scored matching) |
 | iOS, clipboard boost on (opt-in) | one-time handoff link copied by the tap page | exact (`clipboard`) |
 
-The SDK collects only coarse, privacy-clean device fields (screen width, pixel
-ratio, 2-char language, timezone). The **server** adds the IP it observes and
+The SDK collects only coarse device fields (screen width, pixel ratio, the
+device's language tag such as `en-US`, timezone); the server uses only the first
+two letters of the language. The **server** adds the IP it observes and
 computes the signature — the client never sends an IP, and the signature is
 never a cross-app identity.
 
@@ -148,7 +149,8 @@ const strait = createStrait({
 });
 ```
 
-On the first launch only (iOS only), the SDK asks the adapter whether the clipboard
+Only on the once-per-install deferred check (the first launch, or the next one if
+that launch got no answer from the server) and only on iOS, the SDK asks the adapter whether the clipboard
 probably holds a URL (`hasUrlAsync`, iOS `hasURLs`: **no prompt**). Only if it does
 does it read the text, and **iOS then shows its "Allow Paste" prompt**. If the text is
 a Strait handoff link, the SDK sends just its token to `POST /v1/handoff/claim` for an
@@ -159,10 +161,13 @@ what it pastes to `strait.claimHandoff(text)`.
 
 ### Android: enabling the deterministic path
 
-Provide a native module named `StraitInstallReferrer` exposing
-`getInstallReferrer(): Promise<string>` (thin wrapper over Google's
-`InstallReferrerClient`). When present, Android installs resolve exactly; without
-it, Android falls back to the fingerprint path automatically.
+With `createStrait`, pass `installReferrer: fromPlayInstallReferrer(PlayInstallReferrer)`
+(from `react-native-play-install-referrer`), as in the full client above. The
+standalone `resolveDeferredLink` doesn't take that option: it looks for a native
+module named `StraitInstallReferrer` exposing `getInstallReferrer(): Promise<string>`
+(a thin wrapper over Google's `InstallReferrerClient`) that you provide. With either,
+Android installs resolve exactly; without one, Android falls back to the fingerprint
+path automatically.
 
 ## Testing in non-RN contexts
 
