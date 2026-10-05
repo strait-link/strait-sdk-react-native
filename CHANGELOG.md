@@ -2,15 +2,19 @@
 
 ## Unreleased
 
+## 0.8.1
+
 - **Package renamed** to `@straitlink/react-native` (npm scope `@straitlink`; it was `@strait/sdk-react-native`, never
   published to npm). Update imports: `from '@straitlink/react-native'`. The GitHub repo name is unchanged.
+  The code is otherwise identical to 0.8.0. Tag v0.8.0 (cut before the rename) still carries the old
+  name `@strait/sdk-react-native` in its package.json, so install v0.8.1 or later for the new import path.
+
+## 0.8.0
+
 - Referral codes (preview; shared-spec/proposals/referral-code.md, B21): a matched
   deferred `LinkEvent` (Play referrer, iPhone match, clipboard claim, `claimHandoff`)
   carries `referralCode` when the engine's reply has a valid one. `resolveDeferredLink`'s
   `MatchResult` type documents the same field. New core export `replyReferralCode`.
-
-## 0.8.0
-
 - Optional iPhone clipboard boost (shared-spec/SDK-CONTRACT.md B19). New config
   `clipboardBoost` (default **false**) and `clipboard` (an adapter; `fromExpoClipboard`
   wraps expo-clipboard). With it on, the first iPhone launch checks without a prompt

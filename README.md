@@ -18,7 +18,7 @@ npm install @straitlink/react-native
 Not on the npm registry yet. Until it is, install from GitHub (npm builds it on install):
 
 ```sh
-npm install github:bazingga08/strait-sdk-react-native#v0.8.0
+npm install github:bazingga08/strait-sdk-react-native#v0.8.1
 ```
 
 Android's exact deferred match also wants the Play Install Referrer native
