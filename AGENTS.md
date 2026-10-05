@@ -1,4 +1,4 @@
-# AGENTS.md: Strait React Native SDK (@strait/sdk-react-native)
+# AGENTS.md: Strait React Native SDK (@straitlink/react-native)
 
 Instructions for AI coding agents (Claude Code, Cursor, Codex, Copilot…) that add this SDK to an app or work on
 this repo. Humans: see README.md.
@@ -30,7 +30,7 @@ scheme; iPhone Associated Domains `applinks:<handle>.strait.link` plus the URL s
 // links.ts: create once, outside components; start once at launch
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlayInstallReferrer } from 'react-native-play-install-referrer';
-import { createStrait, fromPlayInstallReferrer } from '@strait/sdk-react-native';
+import { createStrait, fromPlayInstallReferrer } from '@straitlink/react-native';
 
 export const links = createStrait({
   publishableKey: 'st_pub_live_…',      // never the secret key

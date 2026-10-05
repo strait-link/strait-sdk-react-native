@@ -1,4 +1,4 @@
-# @strait/sdk-react-native
+# @straitlink/react-native
 
 Deferred deep linking for React Native — the user taps your link, installs the
 app, and lands on the right screen. No clipboard by default; an opt-in iPhone
@@ -11,7 +11,7 @@ every other SDK via shared golden vectors (run in CI here).
 
 <!-- brand:install -->
 ```sh
-npm install @strait/sdk-react-native
+npm install @straitlink/react-native
 ```
 <!-- /brand:install -->
 
@@ -29,7 +29,7 @@ module (optional but recommended) — see "Android" below.
 Call once after first launch and route to the result:
 
 ```ts
-import { resolveDeferredLink } from '@strait/sdk-react-native';
+import { resolveDeferredLink } from '@straitlink/react-native';
 
 const result = await resolveDeferredLink({
   publishableKey: 'st_pub_live_…',    // Dashboard → Get started (safe in apps; never the secret key)
@@ -49,7 +49,7 @@ if (result.matched && result.longUrl) {
 ```ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlayInstallReferrer } from 'react-native-play-install-referrer';
-import { createStrait, fromPlayInstallReferrer } from '@strait/sdk-react-native';
+import { createStrait, fromPlayInstallReferrer } from '@straitlink/react-native';
 
 const strait = createStrait({
   publishableKey: 'st_pub_live_…',
@@ -139,7 +139,7 @@ one-time link (`https://<your-handle>.strait.link/h/<token>`, single use, 24 h).
 
 ```ts
 import * as Clipboard from 'expo-clipboard';
-import { createStrait, fromExpoClipboard } from '@strait/sdk-react-native';
+import { createStrait, fromExpoClipboard } from '@straitlink/react-native';
 
 const strait = createStrait({
   publishableKey, endpoint,

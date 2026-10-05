@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Package renamed** to `@straitlink/react-native` (npm scope `@straitlink`; it was `@strait/sdk-react-native`, never
+  published to npm). Update imports: `from '@straitlink/react-native'`. The GitHub repo name is unchanged.
 - Referral codes (preview; shared-spec/proposals/referral-code.md, B21): a matched
   deferred `LinkEvent` (Play referrer, iPhone match, clipboard claim, `claimHandoff`)
   carries `referralCode` when the engine's reply has a valid one. `resolveDeferredLink`'s

@@ -1,7 +1,8 @@
 # Publishing to npm
 
 The package name, npm scope, repo URL, homepage and copyright holder all come from
-`brand.json` (name = `<npmScope>/<package>`). Nothing else in this repo types them.
+`brand.json` (name = `<npmScope>/<npmPackage>`, or `<npmScope>/<package>` when
+`npmPackage` is absent). Nothing else in this repo types them.
 
 ## One-time owner setup
 
