@@ -14,11 +14,18 @@ import {
   pruneOpenQueue,
   rememberTap,
   replyClickId,
+  replyReferralCode,
   shouldRetryReport,
   splitUrl,
 } from './core.js';
 
 export { browserScreenWidth, portraitScreenWidth, splitUrl, parseHandoffUrl } from './core.js';
+
+/** B21: `{ referralCode }` for a matched deferred reply that carries a valid code, else nothing. */
+const referral = (matched: boolean, code: unknown): { referralCode?: string } => {
+  const c = matched ? replyReferralCode(code) : null;
+  return c ? { referralCode: c } : {};
+};
 
 /**
  * Clipboard access for the iPhone clipboard boost (contract B19), supplied by
@@ -84,6 +91,13 @@ export interface LinkEvent {
   path?: string;
   params?: Record<string, string>;
   linkId?: string;
+  /**
+   * Deferred links only: the referral code the tap carried (the tap's
+   * `?strait_ref=`, else the link's `referralCode`), when the engine sends one.
+   * Who invited this install; reward them from your server (the
+   * `referral.converted` webhook). Referrals are a preview (contract B21).
+   */
+  referralCode?: string;
   /** Time spent resolving, ms. */
   ms: number;
   at: number;
@@ -381,7 +395,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
             noteTap(replyClickId(json.clickId), t0);
             return emit(id, {
               kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
-              ...destination(json.longUrl), linkId: json.linkId, ms: r.now() - t0, at: t0,
+              ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
             });
           }
           // Not claimable: carry on with signal matching (same openId).
@@ -399,7 +413,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
             if (record) noteTap(replyClickId(json.clickId, clickId), t0);
             return emit(id, {
               kind: 'deferred', route: 'install_referrer', appState: 'closed', matched: true,
-              ...destination(json.longUrl), linkId: json.linkId ?? linkId, ms: r.now() - t0, at: t0,
+              ...destination(json.longUrl), linkId: json.linkId ?? linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
             });
           }
         }
@@ -411,7 +425,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return emit(id, {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),
-        linkId: json.linkId, ms: r.now() - t0, at: t0,
+        linkId: json.linkId, ...referral(json.matched === true, json.referralCode), ms: r.now() - t0, at: t0,
       });
     } catch {
       return emit(id, { kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
@@ -448,7 +462,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return emit(id, {
         kind: 'deferred', route: 'clipboard', appState: 'closed', matched,
         reason: matched ? undefined : json.reason ?? json.error ?? 'no_match',
-        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ms: r.now() - t0, at: t0,
+        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ...referral(matched, json.referralCode), ms: r.now() - t0, at: t0,
       });
     } catch {
       return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });

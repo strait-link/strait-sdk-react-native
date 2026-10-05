@@ -255,6 +255,19 @@ export function replyClickId(reply: unknown, fallback?: string | null): string |
   return null;
 }
 
+/** A referral code as the engine accepts it: 1–64 letters, digits, - or _ (contract B21, proposal). */
+const REFERRAL_CODE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The referral code in a matched deferred reply (`/v1/referrer`, `/v1/match`,
+ * `/v1/handoff/claim`), or null (contract B21, proposal). Only a valid code
+ * counts, kept exactly as sent (codes are case-sensitive); anything else, or
+ * an engine that sends no `referralCode`, gives null.
+ */
+export function replyReferralCode(reply: unknown): string | null {
+  return typeof reply === 'string' && REFERRAL_CODE.test(reply) ? reply : null;
+}
+
 /** A clipboard-boost handoff token as the tap page mints it: 128 random bits, base64url (contract B19). */
 const HANDOFF_TOKEN = /^[A-Za-z0-9_-]{22}$/;
 
