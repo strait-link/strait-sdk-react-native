@@ -1,6 +1,11 @@
-# @straitlink/react-native
+# Strait SDK for React Native
 
-Deferred deep linking for React Native — the user taps your link, installs the
+`@straitlink/react-native`
+
+> **Availability:** Android: Live · iPhone install matching: **Beta** (not yet proven on a real iPhone) · SDK: Beta (installed from GitHub; not on npm yet).
+> [Platform status](https://straitlink.in/platform-status/) · [Docs](https://straitlink.in/docs/)
+
+Deferred deep linking for React Native: the user taps your link, installs the
 app, and lands on the right screen. No clipboard by default; an opt-in iPhone
 clipboard boost gives exact matches (contract B19).
 
