@@ -7,9 +7,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createStrait, fromExpoClipboard, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
 
 const PK = 'st_pub_test_appowner01';
-const ENDPOINT = 'https://acme.links.test';
+const ENDPOINT = 'https://hilltop.links.test';
 const TOKEN = 'AbCdEfGhIjKlMnOpQrStUv';
-const HANDOFF = `https://acme.links.test/h/${TOKEN}`;
+const HANDOFF = `https://hilltop.links.test/h/${TOKEN}`;
 const CLICK = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
 const device = { screenWidth: 390, pixelRatio: 3, language: 'en', timezone: 'Asia/Kolkata' };
 
@@ -137,7 +137,7 @@ describe('B19: the first-launch flow with the boost on', () => {
   });
 
   it('not a handoff link: nothing about the clipboard is sent; signal matching runs', async () => {
-    for (const text of ['https://evil.example/h/' + TOKEN, 'hello', 'https://acme.links.test/promo', null]) {
+    for (const text of ['https://evil.example/h/' + TOKEN, 'hello', 'https://hilltop.links.test/promo', null]) {
       const { clip } = spyClipboard({ text });
       const { calls: http } = await run({ clipboardBoost: true, clipboard: clip }, noMatch);
       expect(http.map((c) => c.path)).toEqual(['/v1/match']);
@@ -190,7 +190,7 @@ describe('B19: claimHandoff (Paste button)', () => {
   it('text that is not a handoff link: not_handoff, no network call', async () => {
     const { strait, calls: http } = await run({ initialURL: 'https://shop.example/x' }, claimed);
     const before = http.length;
-    const e = await strait.claimHandoff('https://acme.links.test/promo');
+    const e = await strait.claimHandoff('https://hilltop.links.test/promo');
     expect(e).toMatchObject({ matched: false, reason: 'not_handoff' });
     expect(http.length).toBe(before);
   });

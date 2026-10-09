@@ -14,17 +14,22 @@ every other SDK via shared golden vectors (run in CI here).
 
 ## Install
 
+Not on the npm registry yet. Install from GitHub (npm builds it on install):
+
+```sh
+npm install github:bazingga08/strait-sdk-react-native#v0.8.1
+```
+
+The package's name is `@straitlink/react-native` (from `package.json`), so imports read
+`from '@straitlink/react-native'` either way. Once it is published to npm, the install line will be:
+
 <!-- brand:install -->
 ```sh
 npm install @straitlink/react-native
 ```
 <!-- /brand:install -->
 
-Not on the npm registry yet. Until it is, install from GitHub (npm builds it on install):
-
-```sh
-npm install github:bazingga08/strait-sdk-react-native#v0.8.1
-```
+That registry command does not work yet (npm returns 404). Don't try other package names.
 
 Android's exact deferred match also wants the Play Install Referrer native
 module (optional but recommended) — see "Android" below.
@@ -180,3 +185,9 @@ await resolveDeferredLink({
   fetch: myFetchStub,
 });
 ```
+
+## Support
+
+Questions or a bug: support@straitlink.in (replies within 1 working day, IST) or open a
+[GitHub issue](https://github.com/bazingga08/strait-sdk-react-native/issues). Security issues: see
+[SECURITY.md](SECURITY.md).

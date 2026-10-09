@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Docs and tests only, no code change. Demo names: the placeholder company is now "Hilltop Shoes" on reserved
+  hosts (`hilltop.links.test`, `go.hilltop.example`, `hilltop.strait.link`); conformance vectors synced from
+  shared-spec (same cases, renamed hosts). README: GitHub install first, a Support section. AGENTS.md: a
+  "Stop and ask the human" list and a phone-free verify loop (`/v1/tools/app-links`, `/v1/simulate`).
+
 ## 0.8.1
 
 - **Package renamed** to `@straitlink/react-native` (npm scope `@straitlink`; it was `@strait/sdk-react-native`, never

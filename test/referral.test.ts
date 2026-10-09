@@ -7,9 +7,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createStrait, replyReferralCode, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
 
 const PK = 'st_pub_test_appowner01';
-const ENDPOINT = 'https://acme.links.test';
+const ENDPOINT = 'https://hilltop.links.test';
 const TOKEN = 'AbCdEfGhIjKlMnOpQrStUv';
-const HANDOFF = `https://acme.links.test/h/${TOKEN}`;
+const HANDOFF = `https://hilltop.links.test/h/${TOKEN}`;
 const CLICK = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
 const MATCHED = { matched: true, longUrl: 'https://shop.example/invite', linkId: 'lnk_42', clickId: CLICK };
 
