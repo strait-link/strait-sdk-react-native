@@ -139,9 +139,9 @@ export interface CreateStraitConfig {
   /** Android: returns the Play Install Referrer. See `fromPlayInstallReferrer`. */
   installReferrer?: () => Promise<string | null>;
   /**
-   * iPhone clipboard boost (contract B19), default false. When true, the first
-   * launch checks the clipboard (via `clipboard`) for the one-time link the tap
-   * page copied, for an exact match. Reading it shows iOS's paste prompt. Needs
+   * iPhone clipboard boost (contract B19), default false. When true and device
+   * matching finds nothing on the first launch, the SDK checks the clipboard
+   * (via `clipboard`) for the one-time link the tap page copied, for an exact match. Reading it shows iOS's paste prompt. Needs
    * the workspace's "Clipboard boost" setting on. Never touched when false.
    */
   clipboardBoost?: boolean;
@@ -400,24 +400,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
       if (shouldRetryReport(res.status)) throw new Error(`HTTP ${res.status}`);
       return res;
     };
-    try {
-      // B19: the clipboard boost, only on the once-per-install iPhone check.
-      if (record && config.clipboardBoost === true && config.clipboard && r.platform() === 'ios') {
-        const token = await handoffToken(config.clipboard);
-        if (token) {
-          const { json } = await answered('/v1/handoff/claim', {
-            publishableKey: config.publishableKey, token, platform: 'ios', ...tag,
-          });
-          if (json.matched === true) {
-            noteTap(replyClickId(json.clickId), t0);
-            return emit(id, {
-              kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
-              ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
-            });
-          }
-          // Not claimable: carry on with signal matching (same openId).
-        }
-      }
+    // Signal matching (B7 referrer / B8 match). Returns the event, not emitted.
+    const signal = async (): Promise<Omit<LinkEvent, 'id'>> => {
       if (r.platform() === 'android') {
         const referrer = await r.getInstallReferrer().catch(() => null);
         const linkId = parseStraitLink(referrer);
@@ -428,10 +412,10 @@ export function createStrait(config: CreateStraitConfig): Strait {
           });
           if (json.matched) {
             if (record) noteTap(replyClickId(json.clickId, clickId), t0);
-            return emit(id, {
+            return {
               kind: 'deferred', route: 'install_referrer', appState: 'closed', matched: true,
               ...destination(json.longUrl), linkId: json.linkId ?? linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
-            });
+            };
           }
         }
       }
@@ -439,13 +423,38 @@ export function createStrait(config: CreateStraitConfig): Strait {
         publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag,
       });
       if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0);
-      return emit(id, {
+      return {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),
         linkId: json.linkId, ...referral(json.matched === true, json.referralCode), ms: r.now() - t0, at: t0,
+      };
+    };
+    let result: Omit<LinkEvent, 'id'>;
+    try {
+      result = await signal();
+    } catch {
+      result = { kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 };
+    }
+    // B19: device matching first; the clipboard only when it found nothing, and
+    // only on the once-per-install iPhone check. Same openId, one event.
+    const clip = config.clipboard;
+    if (result.matched || !(record && config.clipboardBoost === true && clip && r.platform() === 'ios')) {
+      return emit(id, result);
+    }
+    const token = await handoffToken(clip);
+    if (!token) return emit(id, result);
+    try {
+      const { json } = await answered('/v1/handoff/claim', {
+        publishableKey: config.publishableKey, token, platform: 'ios', ...tag,
+      });
+      if (json.matched !== true) return emit(id, result); // not claimable: keep the match result
+      noteTap(replyClickId(json.clickId), t0);
+      return emit(id, {
+        kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
+        ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
       });
     } catch {
-      return emit(id, { kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
+      return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
     }
   }
 

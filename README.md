@@ -158,12 +158,14 @@ const strait = createStrait({
 });
 ```
 
-On the first launch only (iOS only), the SDK asks the adapter whether the clipboard
+On the first launch only (iOS only), the SDK runs device matching (`/v1/match`)
+first. If that finds the install, the clipboard is never touched and no prompt shows.
+Only if it finds no match (or fails) does the SDK ask the adapter whether the clipboard
 probably holds a URL (`hasUrlAsync`, iOS `hasURLs`: **no prompt**). Only if it does
 does it read the text, and **iOS then shows its "Allow Paste" prompt**. If the text is
 a Strait handoff link, the SDK sends just its token to `POST /v1/handoff/claim` for an
 exact match (`route: 'clipboard'`); anything else never leaves the phone, and the SDK
-falls back to normal matching. To avoid the prompt, show Apple's Paste button
+keeps the device match result. Both attempts share one `openId` (one install, one event). To avoid the prompt, show Apple's Paste button
 (`UIPasteControl` / SwiftUI `PasteButton`, e.g. through a small native view) and pass
 what it pastes to `strait.claimHandoff(text)`.
 

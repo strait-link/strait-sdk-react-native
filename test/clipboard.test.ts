@@ -129,8 +129,10 @@ describe('B19: the first-launch flow with the boost on', () => {
     const { clip, calls } = spyClipboard();
     const { calls: http, events, storage } = await run({ clipboardBoost: true, clipboard: clip }, claimed);
     expect(calls).toEqual(['detect', 'read']);
-    expect(http.map((c) => c.path)).toEqual(['/v1/handoff/claim']);
-    expect(http[0]!.body).toEqual({ publishableKey: PK, token: TOKEN, platform: 'ios', openId: events[0]!.id, at: 1_800_000_000_000 });
+    expect(http.map((c) => c.path)).toEqual(['/v1/match', '/v1/handoff/claim']); // device matching first
+    expect(http[1]!.body).toEqual({ publishableKey: PK, token: TOKEN, platform: 'ios', openId: events[0]!.id, at: 1_800_000_000_000 });
+    expect(http[0]!.body.openId).toBe(events[0]!.id); // one install, one openId
+    expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ kind: 'deferred', route: 'clipboard', matched: true, url: 'https://shop.example/p/42', linkId: 'lnk_42' });
     expect(JSON.parse(storage.data.get('strait.lastTap')!)).toEqual({ clickId: CLICK, at: 1_800_000_000_000 });
     expect(storage.data.get('strait.deferredChecked')).toBe('1');
@@ -145,24 +147,45 @@ describe('B19: the first-launch flow with the boost on', () => {
     }
   });
 
-  it('claim refused (used/expired/unknown): falls back to /v1/match with the same openId', async () => {
-    const { clip } = spyClipboard();
+  it('a device match wins: the clipboard is never touched (no paste prompt)', async () => {
+    const { clip, calls } = spyClipboard();
     const { calls: http, events } = await run({ clipboardBoost: true, clipboard: clip }, {
-      '/v1/handoff/claim': { body: { matched: false, matchMethod: 'none', reason: 'handoff_used' } },
+      ...claimed,
       '/v1/match': { body: { matched: true, longUrl: 'https://shop.example/p/7', linkId: 'lnk_7', matchMethod: 'exact_ext' } },
     });
-    expect(http.map((c) => c.path)).toEqual(['/v1/handoff/claim', '/v1/match']);
-    expect(http[1]!.body.openId).toBe(http[0]!.body.openId);
+    expect(calls).toEqual([]);
+    expect(http.map((c) => c.path)).toEqual(['/v1/match']);
+    expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ route: 'fingerprint', matched: true, linkId: 'lnk_7' });
+  });
+
+  it('device match fails (network): still tries the clipboard', async () => {
+    const { clip } = spyClipboard();
+    const { calls: http, events, storage } = await run({ clipboardBoost: true, clipboard: clip }, { ...claimed, '/v1/match': { status: 503 } });
+    expect(http.map((c) => c.path)).toEqual(['/v1/match', '/v1/handoff/claim']);
+    expect(events[0]).toMatchObject({ route: 'clipboard', matched: true });
+    expect(storage.data.get('strait.deferredChecked')).toBe('1');
+  });
+
+  it('claim refused (used/expired/unknown): keeps the device match result, same openId', async () => {
+    const { clip } = spyClipboard();
+    const { calls: http, events } = await run({ clipboardBoost: true, clipboard: clip }, {
+      ...noMatch,
+      '/v1/handoff/claim': { body: { matched: false, matchMethod: 'none', reason: 'handoff_used' } },
+    });
+    expect(http.map((c) => c.path)).toEqual(['/v1/match', '/v1/handoff/claim']);
+    expect(http[1]!.body.openId).toBe(http[0]!.body.openId);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ route: 'fingerprint', matched: false, reason: 'no_match' });
   });
 
   it('no answer / 429 / 5xx on the claim: reported as network and retried next launch', async () => {
     for (const status of [429, 503]) {
       const { clip } = spyClipboard();
-      const { events, storage, calls: http } = await run({ clipboardBoost: true, clipboard: clip }, { '/v1/handoff/claim': { status } });
+      const { events, storage, calls: http } = await run({ clipboardBoost: true, clipboard: clip }, { ...noMatch, '/v1/handoff/claim': { status } });
       expect(events[0]).toMatchObject({ matched: false, reason: 'network' });
       expect(storage.data.get('strait.deferredChecked')).toBeUndefined();
-      expect(http.map((c) => c.path)).toEqual(['/v1/handoff/claim']);
+      expect(http.map((c) => c.path)).toEqual(['/v1/match', '/v1/handoff/claim']);
     }
   });
 
