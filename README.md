@@ -174,6 +174,42 @@ Provide a native module named `StraitInstallReferrer` exposing
 `InstallReferrerClient`). When present, Android installs resolve exactly; without
 it, Android falls back to the fingerprint path automatically.
 
+## Store sheet (beta; iPhone is beta)
+
+When a user taps **Install** for one of your other apps (a sibling, partner or
+"lite" app), show the app store *inside your app* and keep the deep link for the
+app being installed.
+
+```ts
+const result = await strait.openStoreSheet('https://<handle>.strait.link/promo', {
+  callerId: 'com.yourcompany.app', // Android: your own package, needed for the inline sheet
+  style: 'product_page',           // iPhone: or 'overlay'
+});
+// result.method: inline_install | market | web | product_page | overlay | app_store | none
+```
+
+- **Android:** Google Play inline install (a half-sheet over your app; Google
+  labels it a test feature), then the Play app, then the Play web page. Each
+  carries `referrer=strait_link=<id>&strait_click=<tap>`, which the installed
+  app's Play Install Referrer match reads exactly.
+- **iPhone:** saves this device's match fields for the tap (unless the workspace
+  turned iPhone install matching off), copies the clipboard-boost handoff link
+  when you pass `copyHandoffLink: true`, then shows the App Store with the link's
+  campaign as the `ct` token.
+
+The in-app sheet needs a small native module named `StraitStoreSheet` in your app:
+
+| Method | Platform | Does |
+|---|---|---|
+| `openIntent(intent)` → `Promise<boolean>` | Android | `Intent(intent.action, Uri.parse(intent.data))`, `setPackage(intent.packageName)` when set, put `intent.extras`, `startActivity`; resolve false on `ActivityNotFoundException`. sdk-android's README section 5 has the Kotlin. |
+| `presentProduct(product, style)` → `Promise<boolean>` | iPhone | Show `SKStoreProductViewController` or `SKOverlay` (sdk-swift's `SystemStoreSheetPresenter` does this). |
+
+Without the module the SDK uses `Linking.openURL`: the Play app (`market://`,
+deep link still kept) or the App Store app (`itms-apps://`, match still saved),
+so the user leaves your app. The tap is recorded with `sent_to = store_sheet`
+and is not billed during the beta. It works only where your app is the host: a
+link tapped inside another company's app can't open a store sheet there.
+
 ## Testing in non-RN contexts
 
 Inject a fake adapter and fetch:

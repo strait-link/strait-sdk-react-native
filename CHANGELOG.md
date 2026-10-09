@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Store sheet (beta): `strait.openStoreSheet(url, options)` calls `POST /v1/store-sheet`, then on
+  Android tries Google Play inline install, `market://` and the Play web page (referrer carries
+  `strait_link` + `strait_click`); on iPhone saves the device match (`/v1/match-save`), optionally
+  copies the handoff link, and shows the App Store. Uses an optional `StraitStoreSheet` native
+  module, else `Linking.openURL`. `ClipboardAccess.writeText` (optional) and `fromExpoClipboard`
+  maps `setStringAsync`. New exports in `src/store-sheet.ts`.
 - Docs and tests only, no code change. Demo names: the placeholder company is now "Hilltop Shoes" on reserved
   hosts (`hilltop.links.test`, `go.hilltop.example`, `hilltop.strait.link`); conformance vectors synced from
   shared-spec (same cases, renamed hosts). README: GitHub install first, a Support section. AGENTS.md: a

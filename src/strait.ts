@@ -1,5 +1,12 @@
 import type { DeviceFields } from './adapter.js';
 import {
+  reactNativeStoreSheetOpener,
+  runStoreSheet,
+  type StoreSheetOpener,
+  type StoreSheetOptions,
+  type StoreSheetResult,
+} from './store-sheet.js';
+import {
   AppStateTracker,
   portraitScreenWidth,
   classifyUrl,
@@ -42,6 +49,8 @@ export interface ClipboardAccess {
   hasProbableWebUrl(): Promise<boolean>;
   /** Read the clipboard text. On iOS this shows the system "Allow Paste" prompt. */
   readText(): Promise<string | null>;
+  /** Write clipboard text (optional; only the store sheet's copyHandoffLink uses it). */
+  writeText?(text: string): Promise<void>;
 }
 
 /**
@@ -59,6 +68,8 @@ export interface StraitRuntime {
   onURL(cb: (url: string) => void): () => void;
   onAppState(cb: (state: 'active' | 'background' | 'inactive') => void): () => void;
   now(): number;
+  /** How the store sheet opens stores (optional; the React Native runtimes supply one). */
+  storeSheet?: StoreSheetOpener;
 }
 
 /** Persistent key/value storage, e.g. @react-native-async-storage/async-storage. */
@@ -169,6 +180,12 @@ export interface Strait {
     name: string,
     extra?: { value?: number; currency?: string; linkId?: string; clickId?: string },
   ): Promise<boolean>;
+  /**
+   * Store sheet (beta; iPhone is beta): show the app store inside your app for
+   * one of your short links and keep the deep link for the app being
+   * installed. Never throws. See README "Store sheet".
+   */
+  openStoreSheet(url: string, options?: StoreSheetOptions): Promise<StoreSheetResult>;
   /** Open reports saved while offline, waiting to be sent (debugging). */
   pendingOpenReports(): Promise<number>;
   /** Send saved open reports now (also happens on start and on resume). */
@@ -470,6 +487,22 @@ export function createStrait(config: CreateStraitConfig): Strait {
   }
 
   return {
+    async openStoreSheet(url: string, options: StoreSheetOptions = {}): Promise<StoreSheetResult> {
+      try {
+        const r = await rt();
+        const base = options.opener ?? r.storeSheet ?? {};
+        const clip = config.clipboard?.writeText ? (t: string) => config.clipboard!.writeText!(t) : undefined;
+        const opener: StoreSheetOpener = { ...base, ...(base.writeClipboard || !clip ? {} : { writeClipboard: clip }) };
+        return await runStoreSheet(
+          { call, publishableKey: config.publishableKey, platform: r.platform(), device: () => ({ ...r.collectDevice() }) },
+          url,
+          options,
+          opener,
+        );
+      } catch {
+        return { opened: false, method: 'none', reason: 'error' };
+      }
+    },
     async start() {
       const r = await rt();
       dropStaleTap(r.now());
@@ -569,10 +602,12 @@ export function fromPlayInstallReferrer(mod: {
 export function fromExpoClipboard(mod: {
   hasUrlAsync(): Promise<boolean>;
   getStringAsync(): Promise<string>;
+  setStringAsync?(text: string): Promise<unknown>;
 }): ClipboardAccess {
   return {
     hasProbableWebUrl: () => mod.hasUrlAsync(),
     readText: async () => (await mod.getStringAsync()) || null,
+    ...(mod.setStringAsync ? { writeText: async (t: string) => void (await mod.setStringAsync!(t)) } : {}),
   };
 }
 
@@ -584,6 +619,7 @@ export async function createReactNativeRuntime(
   const rn = await import('react-native');
   const { Linking, AppState, Dimensions, PixelRatio, Platform } = rn;
   return {
+    storeSheet: reactNativeStoreSheetOpener(rn),
     platform: () => (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other'),
     collectDevice: () => ({
       screenWidth: portraitScreenWidth(Dimensions.get('screen').width, Dimensions.get('screen').height),

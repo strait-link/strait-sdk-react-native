@@ -4,12 +4,14 @@
  * never depend on dynamic import().
  */
 // @ts-expect-error optional peer dependency, present in React Native apps
-import { AppState, Dimensions, Linking, PixelRatio, Platform } from 'react-native';
+import { AppState, Dimensions, Linking, NativeModules, PixelRatio, Platform } from 'react-native';
 import { portraitScreenWidth } from './core.js';
+import { reactNativeStoreSheetOpener } from './store-sheet.js';
 import type { StraitRuntime } from './strait.js';
 
 export function nativeRuntime(opts: { installReferrer?: () => Promise<string | null> } = {}): StraitRuntime {
   return {
+    storeSheet: reactNativeStoreSheetOpener({ NativeModules, Linking }),
     platform: () => (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other'),
     collectDevice: () => ({
       screenWidth: portraitScreenWidth(Dimensions.get('screen').width, Dimensions.get('screen').height),

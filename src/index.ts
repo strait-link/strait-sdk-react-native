@@ -106,6 +106,22 @@ export {
   type LinkStart,
 } from './strait.js';
 export {
+  androidStorePlan,
+  appStoreAppUrl,
+  inlineInstallIntent,
+  iosStoreProduct,
+  marketIntent,
+  playWebIntent,
+  reactNativeStoreSheetOpener,
+  runStoreSheet,
+  type StoreIntent,
+  type StoreProduct,
+  type StoreSheetOpener,
+  type StoreSheetOptions,
+  type StoreSheetResult,
+  type StoreSheetStyle,
+} from './store-sheet.js';
+export {
   AppStateTracker,
   classifyUrl,
   normalizeLinkHosts,
