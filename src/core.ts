@@ -146,8 +146,25 @@ export type ClassifiedUrl =
   | null;
 
 /**
+ * The deep link inside an old Firebase Dynamic Links long link (contract B22):
+ * `https://<x>.page.link/?link=<url>&apn=…` → `<url>`. Only on a `*.page.link`
+ * host, only at the root path, only when `link` is an absolute http(s) URL with
+ * a host. Anything else → null (a page.link short link is resolved by the engine).
+ */
+export function pageLinkLongLink(p: SplitUrl): string | null {
+  if (!p.host.endsWith('.page.link') || (p.path !== '/' && p.path !== '')) return null;
+  const link = p.params['link'];
+  if (!link) return null;
+  const inner = splitUrl(link);
+  if (!inner || (inner.scheme !== 'https' && inner.scheme !== 'http') || !inner.host) return null;
+  return link.trim();
+}
+
+/**
  * What a URL handed to the app means:
  * - https on a Strait link host → a short link; ask /v1/resolve for the destination.
+ *   Except an FDL long link on a `*.page.link` link host (B22): its `link=` value
+ *   IS the destination, read on the device with no network call.
  * - other https (a verified link on the customer's own site) → it IS the destination.
  * - yourapp://host/path (browser hand-off) → destination https://host/path.
  * A `strait_click` tap id is removed from the destination and returned apart.
@@ -158,6 +175,11 @@ export function classifyUrl(raw: string, linkHosts: string[]): ClassifiedUrl {
   if (!p0) return null;
   const isWeb = p0.scheme === 'https' || p0.scheme === 'http';
   if (isWeb && linkHosts.map((h) => h.toLowerCase()).includes(p0.host)) {
+    const long = pageLinkLongLink(p0);
+    if (long) {
+      const inner = classifyUrl(long, []);
+      if (inner && !inner.needsResolve) return { ...inner, route: 'app_link' };
+    }
     return { route: 'app_link', needsResolve: true };
   }
   const { url: clean, clickId } = takeClickId(raw);

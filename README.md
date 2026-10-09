@@ -67,6 +67,21 @@ strait.onLink((e) => e.matched && e.path && navigate(e.path, e.params));
 strait.start();
 ```
 
+### Old Firebase page.link links (contract B22)
+
+Moving off Firebase Dynamic Links? People who already have your app can keep opening it from old
+`<x>.page.link` links, as long as Google keeps serving page.link's app-link files (it still does today;
+nobody but Google controls page.link):
+
+1. Keep `applinks:<x>.page.link` (iOS) and the page.link intent filter (Android) in your next app build.
+2. Add the host: `createStrait({ …, linkHosts: ['<x>.page.link'] })`.
+3. Import your old links in the dashboard (Import → Firebase); each keeps its old host and code.
+
+A page.link short link (`https://<x>.page.link/aBcD`) is then looked up like any Strait short link; a long link
+(`https://<x>.page.link/?link=https://…`) opens its `link=` destination on the device, with no network call.
+People without your app still land on whatever Google serves. Tested in unit tests only, not yet on a real
+iPhone.
+
 ### What Strait records automatically (no extra code)
 
 Every time a link opens the app, the SDK reports it once (contract B14):

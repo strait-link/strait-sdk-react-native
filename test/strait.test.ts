@@ -400,3 +400,36 @@ describe('portraitScreenWidth (B17: the shorter side, like Safari screen.width a
     expect(portraitScreenWidth(2340 / 2.625, 1080 / 2.625)).toBe(412);
   });
 });
+
+describe('old Firebase page.link links (B22)', () => {
+  function startWith(rt: ReturnType<typeof fakeRuntime>, engine: ReturnType<typeof fakeEngine>) {
+    const strait = createStrait({
+      publishableKey: PK, endpoint: ENDPOINT, runtime: rt.runtime, fetch: engine.fetch, storage: memoryStore(),
+      linkHosts: ['acme.page.link'],
+    });
+    const events: LinkEvent[] = [];
+    strait.onLink((e) => events.push(e));
+    return { strait, events };
+  }
+
+  it('a page.link short link is resolved by the engine (host + code sent)', async () => {
+    const rt = fakeRuntime({ initialURL: 'https://acme.page.link/aBcD' });
+    const engine = fakeEngine({ '/v1/resolve': { matched: true, longUrl: 'https://shop.example/p/7', linkId: 'lnk_7', slug: 'aBcD', recorded: true } });
+    const { strait, events } = startWith(rt, engine);
+    await strait.start();
+    expect(engine.calls.find((c) => c.path === '/v1/resolve')?.body).toMatchObject({ url: 'https://acme.page.link/aBcD' });
+    expect(events[0]).toMatchObject({ route: 'app_link', matched: true, url: 'https://shop.example/p/7', linkId: 'lnk_7' });
+  });
+
+  it('a page.link long link opens its link= destination with no lookup', async () => {
+    const rt = fakeRuntime({ initialURL: 'https://acme.page.link/?link=https%3A%2F%2Fshop.example%2Fp%2F42%3Fcolor%3Dred&apn=com.acme.app' });
+    const engine = fakeEngine({ '/v1/open': { ok: true } });
+    const { strait, events } = startWith(rt, engine);
+    await strait.start();
+    await flush();
+    expect(events[0]).toMatchObject({ route: 'app_link', matched: true, url: 'https://shop.example/p/42?color=red', path: '/p/42', params: { color: 'red' } });
+    expect(engine.calls.filter((c) => c.path === '/v1/resolve')).toHaveLength(0);
+    // The open is reported as a direct open of the destination (query stripped, B18).
+    expect(engine.calls.find((c) => c.path === '/v1/open')?.body).toMatchObject({ url: 'https://shop.example/p/42', matched: true });
+  });
+});
