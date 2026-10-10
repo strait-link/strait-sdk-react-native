@@ -1,9 +1,34 @@
-# Strait SDK for React Native
+<!-- Header: the same in every Strait SDK README (design system v5). -->
+<p align="center">
+  <a href="https://straitlink.in">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/strait-lockup-dark.svg">
+      <img src=".github/assets/strait-lockup.svg" alt="Strait" width="160" height="53">
+    </picture>
+  </a>
+</p>
+
+<h1 align="center">Strait SDK for React Native</h1>
+
+<p align="center"><strong>Straight to the screen. On the record.</strong><br>
+A tap opens the exact screen, and every link open and install is recorded in your Strait dashboard.</p>
+
+<p align="center">
+  <a href="https://github.com/bazingga08/strait-sdk-react-native/tags"><img alt="Latest version" src="https://img.shields.io/github/v/tag/bazingga08/strait-sdk-react-native?sort=semver&label=version&style=flat-square&labelColor=0F0D0A&color=423B33"></a>
+  <a href="https://straitlink.in/platform-status/"><img alt="SDK: Beta" src="https://img.shields.io/badge/SDK-beta-423B33?style=flat-square&labelColor=0F0D0A"></a>
+  <a href="https://straitlink.in/docs/iphone-install-matching/"><img alt="iPhone: Beta" src="https://img.shields.io/badge/iPhone-beta-423B33?style=flat-square&labelColor=0F0D0A"></a>
+  <a href="https://github.com/bazingga08/strait-sdk-react-native/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/bazingga08/strait-sdk-react-native/ci.yml?branch=main&label=CI&style=flat-square&labelColor=0F0D0A&color=423B33"></a>
+  <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-423B33?style=flat-square&labelColor=0F0D0A"></a>
+</p>
+
+<p align="center">
+  <a href="https://straitlink.in/docs/sdks/react-native/">Docs</a> ·
+  <a href="https://straitlink.in/platform-status/">Platform status</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="#docs-and-support">Talk to the Strait team</a>
+</p>
 
 `@straitlink/react-native`
-
-> **Availability:** Android: Live · iPhone install matching: **Beta** (not yet proven on a real iPhone) · SDK: Beta (installed from GitHub; not on npm yet).
-> [Platform status](https://straitlink.in/platform-status/) · [Docs](https://straitlink.in/docs/)
 
 Deferred deep linking for React Native: the user taps your link, installs the
 app, and lands on the right screen. On iPhone your workspace chooses the
@@ -11,11 +36,19 @@ deferred-link method in the dashboard (device matching, paste handoff, both, or
 neither; device matching is off by default for new workspaces); the SDK reads
 that choice from Strait at runtime (contract B19).
 
-**Straight to the screen. On the record.** A tap opens the exact screen, and
-each link open and install is recorded in your Strait dashboard.
-
 Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
 every other SDK via shared golden vectors (run in CI here).
+
+## Platform features
+
+| Feature | Status | Notes |
+|---|---|---|
+| Android: direct links and deferred links | ● Live | Exact match through the Play Install Referrer native module. |
+| iPhone: Universal Links and install matching | ◐ Beta | Your choice in Dashboard → Settings → iPhone installs: device matching, paste handoff, both or neither, read from Strait at runtime. Device matching is off by default. iPhone matches are labelled Estimated until measured. |
+| Store sheet: the store inside your app | ◐ Beta | Keeps the deep link through the install. |
+| Published on npm | – Not yet | Install from GitHub until it is. |
+
+● Live · ◐ Beta · ○ Planned · – Not yet. The same words as the [platform status](https://straitlink.in/platform-status/) page.
 
 ## Install
 
@@ -252,8 +285,9 @@ await resolveDeferredLink({
 });
 ```
 
-## Support
+## Docs and support
 
-Questions or a bug: support@straitlink.in (replies within 1 working day, IST) or open a
-[GitHub issue](https://github.com/bazingga08/strait-sdk-react-native/issues). Security issues: see
-[SECURITY.md](SECURITY.md).
+- **Docs:** [straitlink.in/docs/sdks/react-native/](https://straitlink.in/docs/sdks/react-native/) · [platform status](https://straitlink.in/platform-status/) · [troubleshooting](https://straitlink.in/docs/troubleshooting/)
+- **Talk to the Strait team:** [support@straitlink.in](mailto:support@straitlink.in) (replies within 1 working day, IST) or call +91 81218 61890.
+- **Bugs and feature requests:** [open an issue](https://github.com/bazingga08/strait-sdk-react-native/issues) on this repo.
+- **Security:** never in a public issue. Write to security@straitlink.in (see [SECURITY.md](SECURITY.md)).
