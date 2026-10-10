@@ -37,7 +37,7 @@ async function run(platform: 'ios' | 'android', routes: Record<string, unknown>,
   }) as unknown as typeof globalThis.fetch;
   const strait = createStrait({
     publishableKey: PK, endpoint: ENDPOINT, runtime: runtime(platform, extra.referrer ?? null), fetch, storage: store(),
-    clipboardBoost: extra.clipboard ? true : undefined, clipboard: extra.clipboard,
+    clipboard: extra.clipboard,
   });
   const events: LinkEvent[] = [];
   strait.onLink((e) => events.push(e));
@@ -66,7 +66,10 @@ describe('B21: referralCode on deferred LinkEvents', () => {
   });
   it('clipboard boost claim', async () => {
     const clipboard: ClipboardAccess = { hasProbableWebUrl: async () => true, readText: async () => HANDOFF };
-    const { events } = await run('ios', { '/v1/handoff/claim': { ...MATCHED, matchMethod: 'clipboard', referralCode: 'ASHA42' } }, { clipboard });
+    const { events } = await run('ios', {
+      '/v1/match': { matched: false, ios: { deviceMatching: true, pasteHandoff: true } }, // the workspace turned Paste handoff on
+      '/v1/handoff/claim': { ...MATCHED, matchMethod: 'clipboard', referralCode: 'ASHA42' },
+    }, { clipboard });
     expect(events[0]).toMatchObject({ route: 'clipboard', matched: true, referralCode: 'ASHA42' });
   });
   it('Paste button (claimHandoff)', async () => {

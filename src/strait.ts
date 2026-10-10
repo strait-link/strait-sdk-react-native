@@ -35,9 +35,21 @@ const referral = (matched: boolean, code: unknown): { referralCode?: string } =>
 };
 
 /**
+ * B19: does this /v1/match reply say the workspace turned the iPhone Paste
+ * handoff on? Only an explicit `ios.pasteHandoff: true` counts (an older engine
+ * without the field = off). Read per reply, never stored.
+ */
+export function pasteHandoffOn(reply: unknown): boolean {
+  const ios = (reply as { ios?: { pasteHandoff?: unknown } } | null | undefined)?.ios;
+  return ios?.pasteHandoff === true;
+}
+
+/**
  * Clipboard access for the iPhone clipboard boost (contract B19), supplied by
  * the app (e.g. expo-clipboard or @react-native-clipboard/clipboard). Strait
- * never calls it unless `clipboardBoost: true`.
+ * calls it only on the first-launch iPhone check, only when the engine's
+ * /v1/match reply found no match and says the workspace turned Paste handoff
+ * on (`ios.pasteHandoff`, Dashboard → Settings → iPhone installs).
  */
 export interface ClipboardAccess {
   /**
@@ -139,13 +151,17 @@ export interface CreateStraitConfig {
   /** Android: returns the Play Install Referrer. See `fromPlayInstallReferrer`. */
   installReferrer?: () => Promise<string | null>;
   /**
-   * iPhone clipboard boost (contract B19), default false. When true and device
-   * matching finds nothing on the first launch, the SDK checks the clipboard
-   * (via `clipboard`) for the one-time link the tap page copied, for an exact match. Reading it shows iOS's paste prompt. Needs
-   * the workspace's "Clipboard boost" setting on. Never touched when false.
+   * @deprecated Ignored. The workspace chooses the iPhone deferred-link method
+   * in Dashboard → Settings → iPhone installs, and the SDK reads that choice
+   * from the engine's /v1/match reply on the first launch (no app release
+   * needed). Kept only so existing code still compiles.
    */
   clipboardBoost?: boolean;
-  /** Clipboard access for `clipboardBoost` (see ClipboardAccess). */
+  /**
+   * Clipboard access for the iPhone paste handoff (contract B19, see
+   * ClipboardAccess). Used only when the workspace turned Paste handoff on;
+   * without it the SDK skips the clipboard step.
+   */
   clipboard?: ClipboardAccess;
   /** Tests / custom platforms. */
   runtime?: StraitRuntime;
@@ -400,6 +416,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
       if (shouldRetryReport(res.status)) throw new Error(`HTTP ${res.status}`);
       return res;
     };
+    // B19: the workspace's live Paste handoff switch, from this launch's
+    // /v1/match reply only. Never stored: the next check asks the engine again.
+    let pasteHandoff = false;
     // Signal matching (B7 referrer / B8 match). Returns the event, not emitted.
     const signal = async (): Promise<Omit<LinkEvent, 'id'>> => {
       if (r.platform() === 'android') {
@@ -423,6 +442,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag,
       });
       if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0);
+      pasteHandoff = pasteHandoffOn(json);
       return {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),
@@ -435,10 +455,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
     } catch {
       result = { kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 };
     }
-    // B19: device matching first; the clipboard only when it found nothing, and
-    // only on the once-per-install iPhone check. Same openId, one event.
+    // B19: device matching first; the clipboard only when the engine answered,
+    // found nothing and says Paste handoff is on, and only on the
+    // once-per-install iPhone check. Same openId, one event.
     const clip = config.clipboard;
-    if (result.matched || !(record && config.clipboardBoost === true && clip && r.platform() === 'ios')) {
+    if (result.matched || !(record && pasteHandoff && clip && r.platform() === 'ios')) {
       return emit(id, result);
     }
     const token = await handoffToken(clip);
@@ -605,7 +626,7 @@ export function fromPlayInstallReferrer(mod: {
 /**
  * Wrap `expo-clipboard` for `clipboard` (contract B19):
  *   import * as Clipboard from 'expo-clipboard';
- *   createStrait({ …, clipboardBoost: true, clipboard: fromExpoClipboard(Clipboard) })
+ *   createStrait({ …, clipboard: fromExpoClipboard(Clipboard) })
  * `hasUrlAsync` uses iOS's hasURLs (no prompt); `getStringAsync` shows the paste prompt.
  */
 export function fromExpoClipboard(mod: {
