@@ -144,7 +144,7 @@ export interface CreateStraitConfig {
   publishableKey: string;
   /** Your Strait link host, e.g. https://<your-handle>.strait.link */
   endpoint: string;
-  /** Extra hosts that serve your short links (custom domains). */
+  /** Extra hosts that serve your short links (custom domains, coming soon). */
   linkHosts?: string[];
   /** Persist "deferred check done" across launches (pass AsyncStorage). */
   storage?: KeyValueStore;

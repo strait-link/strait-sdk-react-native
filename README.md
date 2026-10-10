@@ -8,7 +8,11 @@
 Deferred deep linking for React Native: the user taps your link, installs the
 app, and lands on the right screen. On iPhone your workspace chooses the
 deferred-link method in the dashboard (device matching, paste handoff, both, or
-neither); the SDK reads that choice from Strait at runtime (contract B19).
+neither; device matching is off by default for new workspaces); the SDK reads
+that choice from Strait at runtime (contract B19).
+
+**Straight to the screen. On the record.** A tap opens the exact screen, and
+each link open and install is recorded in your Strait dashboard.
 
 Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
 every other SDK via shared golden vectors (run in CI here).
@@ -139,7 +143,7 @@ never a cross-app identity.
 How iPhone install matching works, what is kept (IP only as a keyed hash, for 1 hour)
 and the App Store privacy label to use: https://straitlink.in/docs/iphone-install-matching/ .
 
-### iPhone: you choose the deferred-link method (contract B19)
+### iPhone (beta): you choose the deferred-link method (contract B19)
 
 You make the choice in **Dashboard → Settings → iPhone installs**, with two switches.
 It applies at runtime: the SDK reads both switches from Strait's `/v1/match` reply
