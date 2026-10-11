@@ -276,12 +276,16 @@ link tapped inside another company's app can't open a store sheet there.
 
 ## Testing in non-RN contexts
 
-Inject a fake adapter and fetch:
+Inject a fake runtime, storage and fetch (`StraitRuntime` and `KeyValueStore` are exported types):
 
 ```ts
-await resolveDeferredLink({
+const strait = createStrait({
   publishableKey, endpoint,
-  adapter: { platform: () => 'ios', collectDevice: () => ({...}), getInstallReferrer: async () => null },
+  runtime: {
+    platform: () => 'ios', collectDevice: () => ({...}), getInstallReferrer: async () => null,
+    getInitialURL: async () => null, onURL: () => () => {}, onAppState: () => () => {}, now: () => Date.now(),
+  },
+  storage: myMemoryStore,
   fetch: myFetchStub,
 });
 ```
