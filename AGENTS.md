@@ -7,11 +7,11 @@ Deep links and deferred deep links for React Native and Expo (development builds
 
 ## Install
 
-Not on the npm registry yet: install from GitHub with the two helper packages. Don't guess a registry name
-(`npm install @straitlink/react-native` and look-alikes return 404 or someone else's package); use the line below.
+Install from npm with the two helper packages. Don't guess other package names (look-alikes return 404
+or someone else's package).
 
 ```sh
-npm install github:bazingga08/strait-sdk-react-native#v0.8.1 @react-native-async-storage/async-storage react-native-play-install-referrer
+npm install @straitlink/react-native @react-native-async-storage/async-storage react-native-play-install-referrer
 # Expo: install the two helpers with `npx expo install` so versions match the Expo SDK
 ```
 

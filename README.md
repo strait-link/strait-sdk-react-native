@@ -46,20 +46,11 @@ the other app SDKs via shared golden vectors (run in CI here).
 | Android: direct links and deferred links | ● Live | Exact match through the Play Install Referrer native module. |
 | iPhone: Universal Links and install matching | ◐ Beta | Your choice in Dashboard → Settings → iPhone installs: device matching, paste handoff, both or neither, read from Strait at runtime. Device matching is off by default. iPhone matches are labelled Estimated until measured. |
 | Store sheet: the store inside your app | ◐ Beta | Keeps the deep link through the install. |
-| Published on npm | – Not yet | Install from GitHub until it is. |
+| Published on npm | ● Live | `npm install @straitlink/react-native` |
 
 ● Live · ◐ Beta · ○ Planned · – Not yet. The same words as the [platform status](https://straitlink.in/platform-status/) page.
 
 ## Install
-
-Not on the npm registry yet. Install from GitHub (npm builds it on install):
-
-```sh
-npm install github:bazingga08/strait-sdk-react-native#v0.8.1
-```
-
-The package's name is `@straitlink/react-native` (from `package.json`), so imports read
-`from '@straitlink/react-native'` either way. Once it is published to npm, the install line will be:
 
 <!-- brand:install -->
 ```sh
@@ -67,32 +58,16 @@ npm install @straitlink/react-native
 ```
 <!-- /brand:install -->
 
-That registry command does not work yet (npm returns 404). Don't try other package names.
+Don't try other package names.
 
 Android's exact deferred match also wants the Play Install Referrer
 (optional but recommended): see "Android" below.
 
 ## Use
 
-Call once after first launch and route to the result:
-
-```ts
-import { resolveDeferredLink } from '@straitlink/react-native';
-
-const result = await resolveDeferredLink({
-  publishableKey: 'st_pub_live_…',    // Dashboard → Get started (safe in apps; never the secret key)
-  endpoint: 'https://<your-handle>.strait.link', // your workspace's link domain
-});
-
-if (result.matched && result.longUrl) {
-  navigationRef.navigate(result.longUrl);
-}
-```
-
-`resolveDeferredLink` never throws — on any error it returns
-`{ matched: false, matchMethod: 'none' }`.
-
-## Full client: every link, every app state, analytics included
+Create one client when the app starts. `start()` runs the deferred check once per install
+(the first launch after an install) and then handles every link that opens the app, in every
+app state, with open reporting included:
 
 ```ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -100,8 +75,8 @@ import { PlayInstallReferrer } from 'react-native-play-install-referrer';
 import { createStrait, fromPlayInstallReferrer } from '@straitlink/react-native';
 
 const strait = createStrait({
-  publishableKey: 'st_pub_live_…',
-  endpoint: 'https://<your-handle>.strait.link',
+  publishableKey: 'st_pub_live_…',                         // Dashboard → Get started (safe in apps; never the secret key)
+  endpoint: 'https://<your-handle>.strait.link',           // your workspace's link domain
   storage: AsyncStorage,                                   // required for reliable analytics
   installReferrer: fromPlayInstallReferrer(PlayInstallReferrer),
 });
@@ -109,6 +84,13 @@ strait.onLinkStart(() => showLoading());
 strait.onLink((e) => e.matched && e.path && navigate(e.path, e.params));
 strait.start();
 ```
+
+For a settings or debug screen, `strait.checkDeferred()` asks again without touching the
+once-per-install flag, and the engine adds no install for it.
+
+> **Legacy:** `resolveDeferredLink({ publishableKey, endpoint })` is the older one-call API.
+> It has no once-per-install guard and no open reporting, so every call counts as a first
+> launch (an install row and an `install.matched` webhook). Use `createStrait` in new code.
 
 ### Old Firebase page.link links (contract B22)
 
@@ -249,7 +231,7 @@ in your code; it does nothing.
 ### Android: enabling the deterministic path
 
 With `createStrait`, pass `installReferrer: fromPlayInstallReferrer(PlayInstallReferrer)`
-(from `react-native-play-install-referrer`), as in the full client above. The
+(from `react-native-play-install-referrer`), as in "Use" above. The
 standalone `resolveDeferredLink` doesn't take that option: it looks for a native
 module named `StraitInstallReferrer` exposing `getInstallReferrer(): Promise<string>`
 (a thin wrapper over Google's `InstallReferrerClient`) that you provide. With either,

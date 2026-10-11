@@ -335,6 +335,35 @@ describe('first launch and the deferred check (B6/B7 revised)', () => {
     await strait.checkDeferred();
     expect(engine.of('/v1/match')).toHaveLength(1);
     expect(engine.of('/v1/match')[0]!.body.openId).toBeUndefined();
+    expect(engine.of('/v1/match')[0]!.body.record).toBe(false);
+  });
+  it('the debug re-check sends record:false on /v1/referrer too; the first-launch check never does', async () => {
+    const engine = fakeEngine({ '/v1/referrer': { body: { matched: true, longUrl: 'https://shop.example/p/42', linkId: 'lnk_42' } } });
+    const { strait } = make(fakeRuntime({ referrer: 'strait_link=lnk_42' }), engine);
+    await strait.start();
+    await strait.checkDeferred();
+    const [first, debug] = engine.of('/v1/referrer');
+    expect(first!.body.record).toBeUndefined();
+    expect(first!.body.openId).toBeDefined();
+    expect(debug!.body).toMatchObject({ record: false });
+    expect(debug!.body.openId).toBeUndefined();
+  });
+  it('a request the engine never answers times out after 10 s and counts as network (retried next launch)', async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = memoryStore();
+      const engine = fakeEngine({ '/v1/match': 'hang' });
+      const { strait, events } = make(fakeRuntime(), engine, storage);
+      const done = strait.start();
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(events).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      await done;
+      expect(events[0]!.reason).toBe('network');
+      expect(storage.data.get('strait.deferredChecked')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('unreadable storage = already checked (no deferred jump); write failures never throw', async () => {
     const broken: KeyValueStore = { getItem: async () => { throw new Error('io'); }, setItem: async () => { throw new Error('io'); } };

@@ -228,6 +228,8 @@ interface OpenReport {
 const DEFERRED_FLAG = 'strait.deferredChecked';
 const QUEUE_KEY = 'strait.pendingOpens';
 const TAP_KEY = 'strait.lastTap';
+/** Per request, like the Android SDK's 10 s connect/read timeouts. */
+const HTTP_TIMEOUT_MS = 10_000;
 export function createStrait(config: CreateStraitConfig): Strait {
   const doFetch = config.fetch ?? globalThis.fetch;
   const base = config.endpoint.replace(/\/+$/, '');
@@ -264,14 +266,29 @@ export function createStrait(config: CreateStraitConfig): Strait {
     return event;
   };
 
+  // RN's Android fetch has no timeout of its own: a stalled reply would hang
+  // start() and the open queue. Throws like an offline fetch ('network').
   const call = async (method: 'GET' | 'POST', path: string, body?: unknown) => {
-    const res = await doFetch(`${base}${path}`, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => { abort.abort(); reject(new Error('timeout')); }, HTTP_TIMEOUT_MS);
     });
-    const json = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, json: json as Record<string, any> };
+    const request = (async () => {
+      const res = await doFetch(`${base}${path}`, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: abort.signal,
+      });
+      const json = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, json: json as Record<string, any> };
+    })();
+    try {
+      return await Promise.race([request, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   // ── Remembered tap (B15/B16): the tap id of the last attributed link open,
@@ -402,13 +419,13 @@ export function createStrait(config: CreateStraitConfig): Strait {
   /**
    * The deferred check. `record` (the once-per-install run) sends the openId so
    * the engine records this first open + install exactly once; the debug
-   * re-check doesn't, so it never adds installs.
+   * re-check sends record:false instead, so the engine adds no install.
    */
   async function runDeferred(record: boolean): Promise<LinkEvent> {
     const r = await rt();
     const t0 = r.now();
     const id = newId(t0);
-    const tag = record ? { openId: id, at: t0 } : {};
+    const tag = record ? { openId: id, at: t0 } : { record: false };
     announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
     // No answer, 429 or 5xx = try again next launch (reported as 'network').
     const answered = async (path: string, body: unknown) => {
