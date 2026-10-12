@@ -44,7 +44,7 @@ function engine(routes: Record<string, unknown>, offline = false) {
 const androidReply = { ok: true, beta: true, clickId: CLICK, linkId: 'lnk_42', android: { package: 'shoes.hilltop.app', referrer: REFERRER } };
 const iosReply = (extra: Record<string, unknown> = {}) => ({
   ok: true, beta: true, clickId: CLICK, linkId: 'lnk_42',
-  ios: { appStoreId: '6474676842', campaignToken: 'autumn-sale', deviceMatching: true, handoffUrl: null, ...extra },
+  ios: { appStoreId: '1234567890', campaignToken: 'autumn-sale', deviceMatching: true, handoffUrl: null, ...extra },
 });
 
 function strait(platform: 'ios' | 'android', e: ReturnType<typeof engine>, opener?: StoreSheetOpener, clipboard?: { writeText(t: string): Promise<void> }) {
@@ -76,11 +76,11 @@ describe('store sheet: pure helpers', () => {
 
   it('iPhone product: options win, ct clipped to 30, App Store app URL', () => {
     expect(iosStoreProduct({ appStoreId: 'id1' })).toBeNull();
-    const p = iosStoreProduct({ appStoreId: '6474676842', campaignToken: 'c'.repeat(50) }, { customProductPageId: 'pg-1' })!;
+    const p = iosStoreProduct({ appStoreId: '1234567890', campaignToken: 'c'.repeat(50) }, { customProductPageId: 'pg-1' })!;
     expect(p.campaignToken).toHaveLength(30);
     expect(iosStoreProduct({ appStoreId: '1' }, { appStoreId: '2' })!.appStoreId).toBe('2');
-    expect(appStoreAppUrl({ appStoreId: '6474676842', campaignToken: 'autumn-sale', customProductPageId: 'pg-1' }))
-      .toBe('itms-apps://apps.apple.com/app/id6474676842?ct=autumn-sale&ppid=pg-1');
+    expect(appStoreAppUrl({ appStoreId: '1234567890', campaignToken: 'autumn-sale', customProductPageId: 'pg-1' }))
+      .toBe('itms-apps://apps.apple.com/app/id1234567890?ct=autumn-sale&ppid=pg-1');
   });
 });
 
@@ -132,7 +132,7 @@ describe('strait.openStoreSheet (iPhone, beta)', () => {
     const s = strait('ios', e, { iosProduct: async (p, style) => (shown.push([p, style]), true) });
     const r = await s.openStoreSheet('https://hilltop.strait.link/promo');
     expect(r).toEqual({ opened: true, method: 'product_page', clickId: CLICK, linkId: 'lnk_42', matchSaved: true, handoffCopied: false });
-    expect(shown).toEqual([[{ appStoreId: '6474676842', campaignToken: 'autumn-sale' }, 'product_page']]);
+    expect(shown).toEqual([[{ appStoreId: '1234567890', campaignToken: 'autumn-sale' }, 'product_page']]);
     expect(e.calls.find((c) => c.path === '/v1/match-save')!.body).toEqual({ ...device, linkId: 'lnk_42', clickId: CLICK });
   });
 
@@ -158,7 +158,7 @@ describe('strait.openStoreSheet (iPhone, beta)', () => {
     const r = await strait('ios', e, { openURL: async (u) => (urls.push(u), true) }).openStoreSheet('https://hilltop.strait.link/promo');
     expect(r.method).toBe('app_store');
     expect(r.matchSaved).toBe(true);
-    expect(urls).toEqual(['itms-apps://apps.apple.com/app/id6474676842?ct=autumn-sale']);
+    expect(urls).toEqual(['itms-apps://apps.apple.com/app/id1234567890?ct=autumn-sale']);
   });
 
   it('nothing can show the store: not_shown', async () => {
