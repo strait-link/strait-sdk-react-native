@@ -38,4 +38,4 @@ jobs:
       - run: npm test
       - run: node scripts/brand.mjs --release
       - name: Publish to npm (trusted publishing, provenance on)
-        run: npm publish --access public
+        run: npm publish --access public --provenance # trusted publishing (OIDC), no NPM_TOKEN
