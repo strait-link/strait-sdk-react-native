@@ -1,5 +1,21 @@
 # First publish of @straitlink/react-native (one time, by hand)
 
+## Where this stands (12 Oct 2026)
+
+- Steps 0 and 1 are done: the `straitlink` org exists and `@straitlink/react-native` 0.8.1 was published by hand
+  on 10 Oct 2026 (no provenance, as expected for a laptop publish).
+- **Step 2 (link the trusted publisher) is the one step left**, on npmjs.com. The workflow side is
+  ready: `release.yml` has `id-token: write`, Node 24, npm >= 11.5.1 and no `NPM_TOKEN`.
+- Tags v0.8.2 and v0.8.3 were pushed on 12 Oct; both release runs built, tested and signed
+  provenance, then failed with `E404 Not Found - PUT https://registry.npmjs.org/@straitlink%2freact-native`.
+  That is the error npm gives when no trusted publisher is linked (step 2 not done yet).
+- **Re-run plan, after step 2:** re-run only the v0.8.3 run (GitHub, **Actions**, **Release**, the
+  `v0.8.3` run, **Re-run jobs**, **Re-run failed jobs**; or
+  `gh run rerun 38208747754 --failed -R bazingga08/strait-sdk-react-native`). Do not re-run v0.8.2:
+  0.8.3 supersedes it (once 0.8.3 is out, npm 11 refuses an untagged lower version anyway).
+- Check: `npm view @straitlink/react-native version` prints `0.8.3`, and the npm page shows a
+  provenance badge.
+
 npm only lets you link a trusted publisher to a package that already exists, so
 the very first version goes up from your laptop. Every later version is published
 by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed, with no token.
