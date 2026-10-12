@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Paste handoff (B19, B-SDK-06): new `fromRNClipboard(Clipboard)` adapter for
+  `@react-native-clipboard/clipboard`. It asks `hasWebURL`, which is iOS
+  `detectPatterns(.probableWebURL)`: no prompt, and true for the plain-text link the tap page
+  copies. It is now the recommended adapter.
+- `fromExpoClipboard` fix: it asked only `hasUrlAsync` (iOS `hasURLs`), which is false for a
+  link copied as plain text, so Paste handoff never ran with Expo (an iOS 26.5 simulator shows
+  `hasURLs=false, probableWebURL=true` for that clipboard). When `hasUrlAsync` says no it now
+  asks `hasStringAsync`. expo-clipboard has no probable-URL check, so with Expo iOS shows the
+  paste prompt whenever any text is on the clipboard. The adapter takes the same module as before.
+
 ## 0.8.3
 
 - `checkDeferred()` (the debug / settings re-check) now sends `"record": false` on `/v1/match` and `/v1/referrer`, so the

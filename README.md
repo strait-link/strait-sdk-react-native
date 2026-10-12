@@ -199,17 +199,27 @@ stores it.
 | off | on | Paste handoff only: the SDK reads the clipboard and claims the link. |
 | on | on | Device matching first; the clipboard is read only when it finds no match. |
 
-For Paste handoff, pass a clipboard adapter (without one the SDK skips that step):
+For Paste handoff, pass a clipboard adapter (without one the SDK skips that step).
+The recommended one uses `@react-native-clipboard/clipboard`, whose `hasWebURL` is
+iOS's `detectPatterns(.probableWebURL)`: no prompt, and it recognises the link the
+tap page copies (as plain text):
 
 ```ts
-import * as Clipboard from 'expo-clipboard';
-import { createStrait, fromExpoClipboard } from '@straitlink/react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import { createStrait, fromRNClipboard } from '@straitlink/react-native';
 
 const strait = createStrait({
   publishableKey, endpoint,
-  clipboard: fromExpoClipboard(Clipboard), // or { hasProbableWebUrl, readText } from @react-native-clipboard/clipboard
+  clipboard: fromRNClipboard(Clipboard),
 });
 ```
+
+With `expo-clipboard`, use `fromExpoClipboard(Clipboard)` (`import * as Clipboard from
+'expo-clipboard'`). expo-clipboard can't ask iOS "is this probably a URL?": its
+`hasUrlAsync` (iOS `hasURLs`) is false for plain text, so the adapter falls back to
+`hasStringAsync`. It works, but iOS shows the paste prompt whenever any text is on the
+clipboard, not only a link. `@react-native-clipboard/clipboard` also works in Expo
+development builds (not Expo Go).
 
 On the first launch only (iOS only), the SDK always calls `/v1/match` first (that
 counts the install, and the reply carries your choice). If it matched, the clipboard
@@ -217,7 +227,7 @@ is never touched and no prompt shows. The SDK goes on to the clipboard only when
 the reply arrived, found no match and says `pasteHandoff: true`. If `/v1/match` gets
 no answer (or 429 / 5xx), the choice is unknown, so the clipboard is not touched
 and the check runs again next launch (`reason: 'network'`). For the clipboard, the SDK first asks the adapter whether the clipboard
-probably holds a URL (`hasUrlAsync`, iOS `hasURLs`: **no prompt**). Only if it does
+probably holds a URL (`hasWebURL`, iOS `detectPatterns(.probableWebURL)`: **no prompt**). Only if it does
 does it read the text, and **iOS then shows its "Allow Paste" prompt**. If the text is
 a Strait handoff link, the SDK sends just its token to `POST /v1/handoff/claim` for an
 exact match (`route: 'clipboard'`); anything else never leaves the phone, and the SDK

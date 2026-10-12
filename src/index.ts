@@ -97,6 +97,7 @@ export {
   createReactNativeRuntime,
   fromPlayInstallReferrer,
   fromExpoClipboard,
+  fromRNClipboard,
   pasteHandoffOn,
   type ClipboardAccess,
   type Strait,

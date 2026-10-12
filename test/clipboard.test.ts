@@ -7,7 +7,7 @@
  * The old app-side `clipboardBoost` flag is ignored.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createStrait, fromExpoClipboard, pasteHandoffOn, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
+import { createStrait, fromExpoClipboard, fromRNClipboard, pasteHandoffOn, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
 
 const PK = 'st_pub_test_appowner01';
 const ENDPOINT = 'https://hilltop.links.test';
@@ -319,10 +319,73 @@ describe('B19: claimHandoff (Paste button)', () => {
   });
 });
 
+// B-SDK-06. The tap page copies the handoff link with navigator.clipboard.writeText,
+// i.e. plain text. On an iOS 26.5 simulator a plain-text URL gives hasURLs=false,
+// hasStrings=true, detectPatterns(.probableWebURL)=true (test/ios-paste-probe).
 describe('fromExpoClipboard', () => {
   it('maps hasUrlAsync / getStringAsync', async () => {
     const c = fromExpoClipboard({ hasUrlAsync: async () => true, getStringAsync: async () => '' });
     expect(await c.hasProbableWebUrl()).toBe(true);
     expect(await c.readText()).toBeNull();
+  });
+
+  it('a plain-text link (hasURLs false) still counts when the module has hasStringAsync', async () => {
+    const hasStringAsync = vi.fn(async () => true);
+    const c = fromExpoClipboard({ hasUrlAsync: async () => false, hasStringAsync, getStringAsync: async () => HANDOFF });
+    expect(await c.hasProbableWebUrl()).toBe(true);
+    expect(await c.readText()).toBe(HANDOFF);
+  });
+
+  it('asks hasStringAsync only when hasUrlAsync said no', async () => {
+    const hasStringAsync = vi.fn(async () => true);
+    const c = fromExpoClipboard({ hasUrlAsync: async () => true, hasStringAsync, getStringAsync: async () => HANDOFF });
+    expect(await c.hasProbableWebUrl()).toBe(true);
+    expect(hasStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('an empty clipboard stays a no (no read, no prompt)', async () => {
+    const c = fromExpoClipboard({ hasUrlAsync: async () => false, hasStringAsync: async () => false, getStringAsync: async () => '' });
+    expect(await c.hasProbableWebUrl()).toBe(false);
+  });
+
+  it('end to end: Expo adapter + plain-text handoff link claims the exact match', async () => {
+    const eng = engine({
+      '/v1/match': { body: { matched: false, ios: { pasteHandoff: true } } },
+      '/v1/handoff/claim': { body: { matched: true, longUrl: 'https://hilltop.example/p/1', linkId: 'L1', clickId: CLICK } },
+    });
+    const clip = fromExpoClipboard({ hasUrlAsync: async () => false, hasStringAsync: async () => true, getStringAsync: async () => HANDOFF });
+    const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: runtime('ios'), storage: store(), fetch: eng.fetch, clipboard: clip });
+    const ev = await new Promise<LinkEvent>((resolve) => { strait.onLink(resolve); void strait.start(); });
+    expect(ev).toMatchObject({ kind: 'deferred', route: 'clipboard', matched: true });
+    expect(eng.calls.find((c) => c.path === '/v1/handoff/claim')?.body.token).toBe(TOKEN);
+  });
+});
+
+describe('fromRNClipboard (@react-native-clipboard/clipboard)', () => {
+  it('asks hasWebURL (iOS detectPatterns .probableWebURL), never hasURL', async () => {
+    const hasURL = vi.fn(async () => false);
+    const c = fromRNClipboard({ hasWebURL: async () => true, hasURL, getString: async () => HANDOFF, setString: () => undefined });
+    expect(await c.hasProbableWebUrl()).toBe(true);
+    expect(hasURL).not.toHaveBeenCalled();
+    expect(await c.readText()).toBe(HANDOFF);
+  });
+
+  it('plain text that is not a URL: no, so the SDK never reads it (no prompt)', async () => {
+    const c = fromRNClipboard({ hasWebURL: async () => false, getString: async () => 'hello' });
+    expect(await c.hasProbableWebUrl()).toBe(false);
+  });
+
+  it('hasWebURL off iOS returns undefined: treated as no', async () => {
+    const c = fromRNClipboard({ hasWebURL: () => undefined, getString: async () => '' });
+    expect(await c.hasProbableWebUrl()).toBe(false);
+    expect(await c.readText()).toBeNull();
+  });
+
+  it('writeText maps to setString when given (store sheet copyHandoffLink)', async () => {
+    const setString = vi.fn();
+    const c = fromRNClipboard({ hasWebURL: async () => true, getString: async () => '', setString });
+    await c.writeText!(HANDOFF);
+    expect(setString).toHaveBeenCalledWith(HANDOFF);
+    expect(fromRNClipboard({ hasWebURL: async () => true, getString: async () => '' }).writeText).toBeUndefined();
   });
 });

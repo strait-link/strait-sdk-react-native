@@ -54,9 +54,9 @@ export function pasteHandoffOn(reply: unknown): boolean {
 export interface ClipboardAccess {
   /**
    * Without any prompt: does the clipboard probably hold a web URL? On iOS use
-   * UIPasteboard detectPatterns(.probableWebURL) or hasURLs (expo-clipboard
-   * `hasUrlAsync`, @react-native-clipboard `hasURL`), which do not show the
-   * paste prompt.
+   * UIPasteboard detectPatterns(.probableWebURL) (@react-native-clipboard
+   * `hasWebURL`, see fromRNClipboard). Not hasURLs alone: the tap page copies
+   * the link as plain text, and hasURLs is false for plain text.
    */
   hasProbableWebUrl(): Promise<boolean>;
   /** Read the clipboard text. On iOS this shows the system "Allow Paste" prompt. */
@@ -641,18 +641,43 @@ export function fromPlayInstallReferrer(mod: {
 }
 
 /**
+ * Wrap `@react-native-clipboard/clipboard` for `clipboard` (contract B19), the
+ * recommended adapter:
+ *   import Clipboard from '@react-native-clipboard/clipboard';
+ *   createStrait({ …, clipboard: fromRNClipboard(Clipboard) })
+ * `hasWebURL` is iOS's detectPatterns(.probableWebURL): no prompt, and true for
+ * the plain-text link the tap page copies. `getString` shows the paste prompt.
+ */
+export function fromRNClipboard(mod: {
+  hasWebURL(): Promise<boolean> | undefined;
+  getString(): Promise<string>;
+  setString?(text: string): void;
+}): ClipboardAccess {
+  return {
+    hasProbableWebUrl: async () => (await mod.hasWebURL()) === true,
+    readText: async () => (await mod.getString()) || null,
+    ...(mod.setString ? { writeText: async (t: string) => mod.setString!(t) } : {}),
+  };
+}
+
+/**
  * Wrap `expo-clipboard` for `clipboard` (contract B19):
  *   import * as Clipboard from 'expo-clipboard';
  *   createStrait({ …, clipboard: fromExpoClipboard(Clipboard) })
- * `hasUrlAsync` uses iOS's hasURLs (no prompt); `getStringAsync` shows the paste prompt.
+ * expo-clipboard has no detectPatterns(.probableWebURL). Its `hasUrlAsync` is
+ * iOS hasURLs, which is false for the plain-text link the tap page copies, so
+ * when it says no the adapter falls back to `hasStringAsync` (hasStrings, no
+ * prompt). The cost: iOS shows the paste prompt whenever any text is on the
+ * clipboard, not only a URL. `getStringAsync` shows the paste prompt.
  */
 export function fromExpoClipboard(mod: {
   hasUrlAsync(): Promise<boolean>;
+  hasStringAsync?(): Promise<boolean>;
   getStringAsync(): Promise<string>;
   setStringAsync?(text: string): Promise<unknown>;
 }): ClipboardAccess {
   return {
-    hasProbableWebUrl: () => mod.hasUrlAsync(),
+    hasProbableWebUrl: async () => (await mod.hasUrlAsync()) || (mod.hasStringAsync ? await mod.hasStringAsync() : false),
     readText: async () => (await mod.getStringAsync()) || null,
     ...(mod.setStringAsync ? { writeText: async (t: string) => void (await mod.setStringAsync!(t)) } : {}),
   };
