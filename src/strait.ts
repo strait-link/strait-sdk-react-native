@@ -240,7 +240,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const tracker = new AppStateTracker();
   const startListeners = new Set<(s: LinkStart) => void>();
   let isFirstLaunch = false;
-  /** A direct link arrived in this launch (B6: the check's "no link" then stays quiet). */
+  /** A direct link arrived in this launch (B6: the first-launch check then stays quiet). */
   let directArrived = false;
 
   const rt = async (): Promise<StraitRuntime> =>
@@ -428,13 +428,14 @@ export function createStrait(config: CreateStraitConfig): Strait {
     const id = newId(t0);
     const tag = record ? { openId: id, at: t0 } : { record: false };
     // B6: a link that arrived before or while this once-per-install check ran is
-    // what the person wants now. The check's "no link" answer (no_match or
+    // what the person wants now. The check's answer (a match, no_match or
     // network) is returned but not delivered: it would pull the app off that
-    // link's screen. Nor is a start signal sent once a link is here, since no
-    // event may follow it (a loading state would never end).
+    // link's screen to a stale pre-install destination. The engine has still
+    // counted (and attributed) the install. Nor is a start signal sent once a
+    // link is here, since no event may follow it (a loading state would never end).
     const quiet = () => record && directArrived;
     if (!quiet()) announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
-    const done = (e: Omit<LinkEvent, 'id'>): LinkEvent => (quiet() && !e.matched ? { id, ...e } : emit(id, e));
+    const done = (e: Omit<LinkEvent, 'id'>): LinkEvent => (quiet() ? { id, ...e } : emit(id, e));
     // No answer, 429 or 5xx = try again next launch (reported as 'network').
     const answered = async (path: string, body: unknown) => {
       const res = await call('POST', path, body);
@@ -484,10 +485,12 @@ export function createStrait(config: CreateStraitConfig): Strait {
     // found nothing and says Paste handoff is on, and only on the
     // once-per-install iPhone check. Same openId, one event.
     const clip = config.clipboard;
-    if (result.matched || !(record && pasteHandoff && clip && r.platform() === 'ios')) {
+    // Once a link is here the result won't be delivered: don't read the
+    // clipboard (that shows iOS's paste prompt for nothing).
+    if (result.matched || quiet() || !(record && pasteHandoff && clip && r.platform() === 'ios')) {
       return done(result);
     }
-    const token = await handoffToken(clip);
+    const token = await handoffToken(clip, quiet);
     if (!token) return done(result);
     try {
       const { json } = await answered('/v1/handoff/claim', {
@@ -504,10 +507,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
     }
   }
 
-  /** B19 steps 1–3: detect (no prompt) → read only if a URL is likely → parse. Never throws. */
-  async function handoffToken(clip: ClipboardAccess): Promise<string | null> {
+  /** B19 steps 1–3: detect (no prompt) → read only if a URL is likely → parse. Never throws.
+   *  `skip()` true after the detect (a link arrived meanwhile) = no read, no prompt. */
+  async function handoffToken(clip: ClipboardAccess, skip: () => boolean): Promise<string | null> {
     try {
-      if (!(await clip.hasProbableWebUrl())) return null;
+      if (!(await clip.hasProbableWebUrl()) || skip()) return null;
       return parseHandoffUrl(await clip.readText(), linkHosts);
     } catch {
       return null;

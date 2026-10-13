@@ -221,6 +221,72 @@ describe('B19: the first-launch flow with Paste handoff on (from the engine)', (
   });
 });
 
+// B6 + B19 (13 Oct follow-up): once a link has opened the app in this launch,
+// the first-launch check's answer won't be delivered, so reading the clipboard
+// would show iOS's paste prompt for nothing.
+describe('a link that arrives during the first-launch check: no paste prompt', () => {
+  /** iPhone runtime with taps; `hold` gates one step until released. */
+  function setup(hold: '/v1/match' | 'detect' | '/v1/handoff/claim') {
+    let urlCb: ((u: string) => void) | null = null;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let held = false;
+    const rt: StraitRuntime = { ...runtime(), onURL: (cb) => ((urlCb = cb), () => (urlCb = null)) };
+    const { clip, calls } = spyClipboard();
+    const detect = clip.hasProbableWebUrl;
+    if (hold === 'detect') clip.hasProbableWebUrl = async () => { held = true; await gate; return detect(); };
+    const e = engine({ ...pasteOn, ...claimed });
+    const fetch = (async (url: string, init?: RequestInit) => {
+      if (new URL(url).pathname === hold) { held = true; await gate; }
+      return e.fetch(url, init);
+    }) as unknown as typeof globalThis.fetch;
+    const storage = store();
+    const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: rt, fetch, storage, clipboard: clip });
+    const events: LinkEvent[] = [];
+    strait.onLink((ev) => events.push(ev));
+    const until = async (cond: () => boolean) => {
+      for (let i = 0; i < 50 && !cond(); i++) await new Promise((r) => setTimeout(r, 0));
+    };
+    const play = async () => {
+      const started = strait.start();
+      await until(() => held);
+      urlCb!('https://shop.example/product/42');
+      await until(() => events.length > 0);
+      release();
+      await started;
+    };
+    // The direct link's own open report (/v1/open) is left out.
+    const deferredCalls = () => e.calls.map((c) => c.path).filter((p) => p !== '/v1/open');
+    return { play, calls, deferredCalls, events, storage };
+  }
+
+  it('link before the clipboard step (/v1/match still waiting): the clipboard is never touched', async () => {
+    const s = setup('/v1/match');
+    await s.play();
+    expect(s.calls).toEqual([]);
+    expect(s.deferredCalls()).toEqual(['/v1/match']);
+    expect(s.events.map((e) => e.kind)).toEqual(['direct']);
+    expect(s.storage.data.get('strait.deferredChecked')).toBe('1');
+  });
+
+  it('link while the prompt-free detect runs: the clipboard is not read', async () => {
+    const s = setup('detect');
+    await s.play();
+    expect(s.calls).toEqual(['detect']);
+    expect(s.deferredCalls()).toEqual(['/v1/match']);
+    expect(s.events.map((e) => e.kind)).toEqual(['direct']);
+  });
+
+  it('link after the read: the claim goes ahead as before, but its match is not delivered', async () => {
+    const s = setup('/v1/handoff/claim');
+    await s.play();
+    expect(s.calls).toEqual(['detect', 'read']);
+    expect(s.deferredCalls()).toEqual(['/v1/match', '/v1/handoff/claim']);
+    expect(s.events.map((e) => e.kind)).toEqual(['direct']);
+    expect(s.storage.data.get('strait.deferredChecked')).toBe('1');
+  });
+});
+
 describe('Founder decision 10 Oct 2026: the customer picks the iPhone method in the dashboard, applied at runtime', () => {
   const claimable = { '/v1/handoff/claim': claimed['/v1/handoff/claim'] };
 

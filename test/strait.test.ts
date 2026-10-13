@@ -235,9 +235,11 @@ describe('deferred links (installed after tapping)', () => {
       let release!: () => void;
       const gate = new Promise<void>((r) => (release = r));
       const calls: string[] = [];
-      const fetch = (async (url: string) => {
+      const bodies: Record<string, any> = {};
+      const fetch = (async (url: string, init?: RequestInit) => {
         const path = new URL(url).pathname;
         calls.push(path);
+        bodies[path] = init?.body ? JSON.parse(String(init.body)) : undefined;
         if (path === '/v1/match') {
           await gate;
           if (reply === 'offline') throw new TypeError('Network request failed');
@@ -245,7 +247,7 @@ describe('deferred links (installed after tapping)', () => {
         }
         return { ok: true, status: 202, json: async () => ({}) } as Response;
       }) as unknown as typeof fetch;
-      return { fetch, calls, release };
+      return { fetch, calls, bodies, release };
     }
     const run = (engine: ReturnType<typeof heldMatch>, rt = fakeRuntime(), storage = memoryStore()) => {
       const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: rt.runtime, fetch: engine.fetch, storage });
@@ -314,6 +316,37 @@ describe('deferred links (installed after tapping)', () => {
       expect(events.map((e) => e.kind)).toEqual(['direct']);
       expect(engine.calls).toContain('/v1/match'); // the install is still counted
       expect(opening).toBe(false);
+    });
+
+    // 13 Oct follow-up: a late deferred *match* would jump from the screen the
+    // person just tapped to a stale pre-install destination.
+    it("the check's late match is not delivered after the link either; the install is still counted and the check done", async () => {
+      const matchReply = { matched: true, longUrl: 'https://shop.example/promo/7', linkId: 'lnk_7', clickId: 'c-7' };
+      const engine = heldMatch({ status: 200, json: matchReply });
+      const { strait, events, storage, rt } = run(engine);
+      let opening = false;
+      strait.onLinkStart(() => (opening = true));
+      strait.onLink(() => (opening = false));
+      const started = strait.start();
+      await until(() => engine.calls.includes('/v1/match'));
+      rt.tap('straitlink://shop.example/product/42');
+      await until(() => events.length > 0);
+      engine.release();
+      await started;
+      await flush();
+      expect(events.map((e) => [e.kind, e.path])).toEqual([['direct', '/product/42']]);
+      expect(opening).toBe(false);
+      // The engine got this install's openId (it records and attributes the match as before).
+      expect(engine.bodies['/v1/match'].openId).toEqual(expect.any(String));
+      expect(engine.bodies['/v1/match'].record).toBeUndefined();
+      expect(await storage.getItem('strait.deferredChecked')).toBe('1');
+      // Not replayed to late subscribers.
+      const late: LinkEvent[] = [];
+      strait.onLink((e) => late.push(e));
+      expect(late.map((e) => e.kind)).toEqual(['direct']);
+      // An explicit checkDeferred() still returns (and delivers) its answer.
+      const again = await strait.checkDeferred();
+      expect(again).toMatchObject({ kind: 'deferred', matched: true, path: '/promo/7' });
     });
 
     it('with no link this launch, the no-match is still delivered', async () => {
