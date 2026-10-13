@@ -260,6 +260,9 @@ describe('deferred links (installed after tapping)', () => {
     it("the check's no-match is not delivered after the link (exact emulator order)", async () => {
       const engine = heldMatch({ status: 200, json: { matched: false, matchMethod: 'none' } });
       const { strait, events, storage, rt } = run(engine);
+      let opening = false;
+      strait.onLinkStart(() => (opening = true));
+      strait.onLink(() => (opening = false));
       const started = strait.start();
       await until(() => engine.calls.includes('/v1/match'));
       rt.tap('straitlink://shop.example/product/42');
@@ -268,6 +271,7 @@ describe('deferred links (installed after tapping)', () => {
       await started;
       await flush();
       expect(events.map((e) => [e.kind, e.matched, e.path])).toEqual([['direct', true, '/product/42']]);
+      expect(opening).toBe(false);
       // The engine answered: the install is counted and the check is done.
       expect(await storage.getItem('strait.deferredChecked')).toBe('1');
       // Late subscribers get the same history.
@@ -289,12 +293,16 @@ describe('deferred links (installed after tapping)', () => {
       expect(await storage.getItem('strait.deferredChecked')).toBeNull();
     });
 
-    it('a link that arrives before the check starts also wins', async () => {
+    it('a link that arrives before the check starts also wins, and no loading state is left open', async () => {
       const engine = heldMatch({ status: 200, json: { matched: false } });
       const rt = fakeRuntime();
       let releaseInitial!: () => void;
       rt.runtime.getInitialURL = () => new Promise((r) => (releaseInitial = () => r(null))); // waits for the Activity
       const { strait, events } = run(engine, rt);
+      // The documented LinkLoading pattern: spinner on at any start, off at any event.
+      let opening = false;
+      strait.onLinkStart(() => (opening = true));
+      strait.onLink(() => (opening = false));
       const started = strait.start();
       await until(() => releaseInitial !== undefined);
       rt.tap('straitlink://shop.example/product/42');
@@ -304,6 +312,8 @@ describe('deferred links (installed after tapping)', () => {
       engine.release();
       await started;
       expect(events.map((e) => e.kind)).toEqual(['direct']);
+      expect(engine.calls).toContain('/v1/match'); // the install is still counted
+      expect(opening).toBe(false);
     });
 
     it('with no link this launch, the no-match is still delivered', async () => {

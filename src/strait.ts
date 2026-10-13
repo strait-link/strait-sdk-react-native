@@ -427,12 +427,14 @@ export function createStrait(config: CreateStraitConfig): Strait {
     const t0 = r.now();
     const id = newId(t0);
     const tag = record ? { openId: id, at: t0 } : { record: false };
-    announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
-    // B6: a link that arrived while this once-per-install check ran is what the
-    // person wants now. The check's "no link" answer (no_match or network) is
-    // returned but not delivered: it would pull the app off that link's screen.
-    const done = (e: Omit<LinkEvent, 'id'>): LinkEvent =>
-      record && directArrived && !e.matched ? { id, ...e } : emit(id, e);
+    // B6: a link that arrived before or while this once-per-install check ran is
+    // what the person wants now. The check's "no link" answer (no_match or
+    // network) is returned but not delivered: it would pull the app off that
+    // link's screen. Nor is a start signal sent once a link is here, since no
+    // event may follow it (a loading state would never end).
+    const quiet = () => record && directArrived;
+    if (!quiet()) announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
+    const done = (e: Omit<LinkEvent, 'id'>): LinkEvent => (quiet() && !e.matched ? { id, ...e } : emit(id, e));
     // No answer, 429 or 5xx = try again next launch (reported as 'network').
     const answered = async (path: string, body: unknown) => {
       const res = await call('POST', path, body);
