@@ -240,6 +240,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const tracker = new AppStateTracker();
   const startListeners = new Set<(s: LinkStart) => void>();
   let isFirstLaunch = false;
+  /** A direct link arrived in this launch (B6: the check's "no link" then stays quiet). */
+  let directArrived = false;
 
   const rt = async (): Promise<StraitRuntime> =>
     (runtime ??= (await import('./native.js')).nativeRuntime({ installReferrer: config.installReferrer }));
@@ -370,6 +372,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     }));
 
   async function handleUrl(raw: string, appState: LinkEvent['appState'], firstLaunch = false) {
+    directArrived = true;
     const r = await rt();
     const t0 = r.now();
     const id = newId(t0);
@@ -425,6 +428,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
     const id = newId(t0);
     const tag = record ? { openId: id, at: t0 } : { record: false };
     announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
+    // B6: a link that arrived while this once-per-install check ran is what the
+    // person wants now. The check's "no link" answer (no_match or network) is
+    // returned but not delivered: it would pull the app off that link's screen.
+    const done = (e: Omit<LinkEvent, 'id'>): LinkEvent =>
+      record && directArrived && !e.matched ? { id, ...e } : emit(id, e);
     // No answer, 429 or 5xx = try again next launch (reported as 'network').
     const answered = async (path: string, body: unknown) => {
       const res = await call('POST', path, body);
@@ -475,22 +483,22 @@ export function createStrait(config: CreateStraitConfig): Strait {
     // once-per-install iPhone check. Same openId, one event.
     const clip = config.clipboard;
     if (result.matched || !(record && pasteHandoff && clip && r.platform() === 'ios')) {
-      return emit(id, result);
+      return done(result);
     }
     const token = await handoffToken(clip);
-    if (!token) return emit(id, result);
+    if (!token) return done(result);
     try {
       const { json } = await answered('/v1/handoff/claim', {
         publishableKey: config.publishableKey, token, platform: 'ios', ...tag,
       });
-      if (json.matched !== true) return emit(id, result); // not claimable: keep the match result
+      if (json.matched !== true) return done(result); // not claimable: keep the match result
       noteTap(replyClickId(json.clickId), t0);
-      return emit(id, {
+      return done({
         kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
         ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
       });
     } catch {
-      return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
+      return done({ kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
     }
   }
 
@@ -626,7 +634,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
  *   createStrait({ …, installReferrer: fromPlayInstallReferrer(PlayInstallReferrer) })
  */
 export function fromPlayInstallReferrer(mod: {
-  getInstallReferrerInfo(cb: (info: { installReferrer?: string } | null, error: unknown) => void): void;
+  // 2.x types installReferrer as string | null, 1.x as string.
+  getInstallReferrerInfo(cb: (info: { installReferrer?: string | null } | null, error: unknown) => void): void;
 }): () => Promise<string | null> {
   return () =>
     new Promise((resolve) => {

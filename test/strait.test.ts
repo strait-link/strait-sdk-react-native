@@ -223,6 +223,110 @@ describe('deferred links (installed after tapping)', () => {
     expect(events.map((e) => e.kind)).toEqual(['direct']);
     expect(await storage.getItem('strait.deferredChecked')).toBe('1');
   });
+
+  // Found on an Android emulator (13 Oct): the app started without a link, the
+  // first-launch check's /v1/match was still waiting (app in the background,
+  // where React Native pauses timers) when a tapped link brought it back. The
+  // link was delivered (`true /product/42`), then the check's "no link" 4 ms
+  // later, and an app that routes home on !matched left the right screen.
+  describe('a link that arrives while the first-launch check is still running wins (B6)', () => {
+    /** /v1/match held open until release(); the rest answers like fakeEngine. */
+    function heldMatch(reply: { status: number; json: unknown } | 'offline') {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const calls: string[] = [];
+      const fetch = (async (url: string) => {
+        const path = new URL(url).pathname;
+        calls.push(path);
+        if (path === '/v1/match') {
+          await gate;
+          if (reply === 'offline') throw new TypeError('Network request failed');
+          return { ok: reply.status < 300, status: reply.status, json: async () => reply.json } as Response;
+        }
+        return { ok: true, status: 202, json: async () => ({}) } as Response;
+      }) as unknown as typeof fetch;
+      return { fetch, calls, release };
+    }
+    const run = (engine: ReturnType<typeof heldMatch>, rt = fakeRuntime(), storage = memoryStore()) => {
+      const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: rt.runtime, fetch: engine.fetch, storage });
+      const events: LinkEvent[] = [];
+      strait.onLink((e) => events.push(e));
+      return { strait, events, storage, rt };
+    };
+    const until = async (cond: () => boolean) => {
+      for (let i = 0; i < 50 && !cond(); i++) await flush();
+    };
+
+    it("the check's no-match is not delivered after the link (exact emulator order)", async () => {
+      const engine = heldMatch({ status: 200, json: { matched: false, matchMethod: 'none' } });
+      const { strait, events, storage, rt } = run(engine);
+      const started = strait.start();
+      await until(() => engine.calls.includes('/v1/match'));
+      rt.tap('straitlink://shop.example/product/42');
+      await until(() => events.length > 0);
+      engine.release();
+      await started;
+      await flush();
+      expect(events.map((e) => [e.kind, e.matched, e.path])).toEqual([['direct', true, '/product/42']]);
+      // The engine answered: the install is counted and the check is done.
+      expect(await storage.getItem('strait.deferredChecked')).toBe('1');
+      // Late subscribers get the same history.
+      const late: LinkEvent[] = [];
+      strait.onLink((e) => late.push(e));
+      expect(late.map((e) => e.kind)).toEqual(['direct']);
+    });
+
+    it("the check's timed-out reply (reason 'network') is not delivered either, and runs again next launch", async () => {
+      const engine = heldMatch('offline');
+      const { strait, events, storage, rt } = run(engine);
+      const started = strait.start();
+      await until(() => engine.calls.includes('/v1/match'));
+      rt.tap('straitlink://shop.example/product/42');
+      await until(() => events.length > 0);
+      engine.release();
+      await started;
+      expect(events.map((e) => e.kind)).toEqual(['direct']);
+      expect(await storage.getItem('strait.deferredChecked')).toBeNull();
+    });
+
+    it('a link that arrives before the check starts also wins', async () => {
+      const engine = heldMatch({ status: 200, json: { matched: false } });
+      const rt = fakeRuntime();
+      let releaseInitial!: () => void;
+      rt.runtime.getInitialURL = () => new Promise((r) => (releaseInitial = () => r(null))); // waits for the Activity
+      const { strait, events } = run(engine, rt);
+      const started = strait.start();
+      await until(() => releaseInitial !== undefined);
+      rt.tap('straitlink://shop.example/product/42');
+      await until(() => events.length > 0);
+      releaseInitial();
+      await until(() => engine.calls.includes('/v1/match'));
+      engine.release();
+      await started;
+      expect(events.map((e) => e.kind)).toEqual(['direct']);
+    });
+
+    it('with no link this launch, the no-match is still delivered', async () => {
+      const engine = heldMatch({ status: 200, json: { matched: false } });
+      const { strait, events } = run(engine);
+      const started = strait.start();
+      engine.release();
+      await started;
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ kind: 'deferred', matched: false, reason: 'no_match' });
+    });
+
+    it('the debug checkDeferred() still answers after a link', async () => {
+      const engine = heldMatch({ status: 200, json: { matched: false } });
+      engine.release();
+      const { strait, events, rt } = run(engine, fakeRuntime(), (() => { const s = memoryStore(); s.data.set('strait.deferredChecked', '1'); return s; })());
+      await strait.start();
+      rt.tap('straitlink://shop.example/product/42');
+      await until(() => events.length > 0);
+      await strait.checkDeferred();
+      expect(events.map((e) => [e.kind, e.matched])).toEqual([['direct', true], ['deferred', false]]);
+    });
+  });
 });
 
 describe('fingerprint check + events', () => {

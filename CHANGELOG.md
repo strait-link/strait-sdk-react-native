@@ -16,6 +16,17 @@
   other Strait SDK, so its device match uses the same language as the engine expects. Its Android
   referrer still comes from your `StraitInstallReferrer` native module. Under Metro (`index.native`)
   both get the runtime through a static import, with no dynamic `import()`.
+- Fix: a link that opens the app while the first-launch deferred check is still running is no
+  longer followed by that check's "no link" event (`matched:false`, `no_match` or `network`).
+  Seen on Android (13 Oct quick-start run): the app started without a link and went to the
+  background, where React Native pauses timers, so `/v1/match` waited; the tapped link was
+  delivered (`true /product/42`) and the check's `false` came 4 ms later, so an app that routes
+  home on `!matched` left the right screen. The check still runs and counts the install, and is
+  marked done (or retried next launch) as before; only its no-link event is not delivered.
+  A deferred match is still delivered; `checkDeferred()` is unchanged (contract B6).
+- Fix: `fromPlayInstallReferrer(PlayInstallReferrer)` typechecks against
+  react-native-play-install-referrer 2.x, which types `installReferrer` as `string | null`
+  (1.x keeps working). The quick-start `links.ts` showed a TypeScript error; the build still ran.
 
 ## 0.8.3
 
