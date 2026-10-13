@@ -14,7 +14,8 @@
   use `nativeRuntime`. `resolveDeferredLink` used its own adapter, which took the language from iOS
   `SettingsManager.AppleLocale` (`en_IN`); it now sends BCP-47 from `Intl` (`en-IN`), like every
   other Strait SDK, so its device match uses the same language as the engine expects. Its Android
-  referrer still comes from your `StraitInstallReferrer` native module.
+  referrer still comes from your `StraitInstallReferrer` native module. Under Metro (`index.native`)
+  both get the runtime through a static import, with no dynamic `import()`.
 
 ## 0.8.3
 
