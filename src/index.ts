@@ -1,11 +1,7 @@
-import {
-  createReactNativeAdapter,
-  parseStraitLink,
-  type NativeAdapter,
-} from './adapter.js';
+import type { NativeAdapter } from './adapter.js';
+import { parseStraitLink } from './core.js';
 
 export type { DeviceFields, NativeAdapter } from './adapter.js';
-export { parseStraitLink } from './adapter.js';
 export { computeSignature, h32 } from './signature.js';
 
 export interface StraitConfig {
@@ -45,7 +41,11 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
   const doFetch = config.fetch ?? globalThis.fetch;
   let adapter: NativeAdapter;
   try {
-    adapter = config.adapter ?? (await createReactNativeAdapter());
+    // The same phone runtime as createStrait (one copy, see native.ts). The Android referrer comes
+    // from the app's own `StraitInstallReferrer` native module, as the README describes.
+    adapter =
+      config.adapter ??
+      (await import('./native.js').then((n) => n.nativeRuntime({ installReferrer: n.moduleInstallReferrer })));
   } catch {
     return NONE;
   }
@@ -94,10 +94,8 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
 
 export {
   createStrait,
-  createReactNativeRuntime,
   fromPlayInstallReferrer,
   fromExpoClipboard,
-  pasteHandoffOn,
   type ClipboardAccess,
   type Strait,
   type StraitRuntime,
@@ -122,27 +120,4 @@ export {
   type StoreSheetResult,
   type StoreSheetStyle,
 } from './store-sheet.js';
-export {
-  AppStateTracker,
-  classifyUrl,
-  normalizeLinkHosts,
-  splitUrl,
-  browserScreenWidth,
-  portraitScreenWidth,
-  parseStraitClick,
-  parseHandoffUrl,
-  takeClickId,
-  newOpenId,
-  pruneOpenQueue,
-  shouldRetryReport,
-  eventClickId,
-  rememberTap,
-  replyClickId,
-  replyReferralCode,
-  ATTRIBUTION_WINDOW_MS,
-  OPEN_QUEUE_MAX,
-  OPEN_QUEUE_MAX_AGE_MS,
-  RESUME_WINDOW_MS,
-  TRANSIENT_PAUSE_MS,
-  type ClassifiedUrl,
-} from './core.js';
+export { splitUrl } from './core.js';

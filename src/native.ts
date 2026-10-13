@@ -34,6 +34,18 @@ export function nativeRuntime(opts: { installReferrer?: () => Promise<string | n
   };
 }
 
+/**
+ * For the legacy `resolveDeferredLink`: the Play Install Referrer from the app's own
+ * `StraitInstallReferrer` native module (`getInstallReferrer(): Promise<string>`), or null.
+ */
+export async function moduleInstallReferrer(): Promise<string | null> {
+  try {
+    return (await NativeModules?.StraitInstallReferrer?.getInstallReferrer?.()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function intl(field: 'locale' | 'timeZone', fallback: string): string {
   try {
     const o = Intl.DateTimeFormat().resolvedOptions();

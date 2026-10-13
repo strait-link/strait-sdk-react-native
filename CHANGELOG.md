@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0
+
+- Smaller public API (SDK-23, decision record: shared-spec `docs/adr/0001-sdk-public-api-surface.md`).
+  No longer exported, because they were never in the docs: the contract helpers from `src/core.ts`
+  (`AppStateTracker`, `classifyUrl`, `normalizeLinkHosts`, `browserScreenWidth`, `portraitScreenWidth`,
+  `parseStraitClick`, `parseHandoffUrl`, `takeClickId`, `newOpenId`, `pruneOpenQueue`,
+  `shouldRetryReport`, `eventClickId`, `rememberTap`, `replyClickId`, `replyReferralCode`, the queue
+  and window constants, `ClassifiedUrl`), `parseStraitLink`, `pasteHandoffOn` and
+  `createReactNativeRuntime`. `splitUrl` stays (the docs use it). Nothing to change if you use
+  `createStrait`, `resolveDeferredLink`, `fromPlayInstallReferrer`, `fromExpoClipboard` or `openStoreSheet`.
+- One phone runtime instead of three (P2-4): `createStrait` and the legacy `resolveDeferredLink` both
+  use `nativeRuntime`. `resolveDeferredLink` used its own adapter, which took the language from iOS
+  `SettingsManager.AppleLocale` (`en_IN`); it now sends BCP-47 from `Intl` (`en-IN`), like every
+  other Strait SDK, so its device match uses the same language as the engine expects. Its Android
+  referrer still comes from your `StraitInstallReferrer` native module.
+
 ## 0.8.3
 
 - `checkDeferred()` (the debug / settings re-check) now sends `"record": false` on `/v1/match` and `/v1/referrer`, so the

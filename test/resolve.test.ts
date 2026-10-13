@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseStraitLink, resolveDeferredLink } from '../src/index.js';
+import { resolveDeferredLink } from '../src/index.js';
+import { parseStraitLink } from '../src/core.js';
 import type { NativeAdapter } from '../src/adapter.js';
 
 const device = {

@@ -4,7 +4,8 @@
  * engine, no referral, or not matched) = no field.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createStrait, replyReferralCode, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
+import { replyReferralCode } from '../src/core.js';
+import { createStrait, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
 
 const PK = 'st_pub_test_appowner01';
 const ENDPOINT = 'https://hilltop.links.test';

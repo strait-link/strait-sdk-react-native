@@ -1,6 +1,5 @@
 import type { DeviceFields } from './adapter.js';
 import {
-  reactNativeStoreSheetOpener,
   runStoreSheet,
   type StoreSheetOpener,
   type StoreSheetOptions,
@@ -8,7 +7,6 @@ import {
 } from './store-sheet.js';
 import {
   AppStateTracker,
-  portraitScreenWidth,
   classifyUrl,
   eventClickId,
   reportUrl,
@@ -67,7 +65,7 @@ export interface ClipboardAccess {
 
 /**
  * Everything the SDK needs from the phone, behind one interface so the logic
- * runs (and is tested) in plain Node. `createReactNativeRuntime` is the real one.
+ * runs (and is tested) in plain Node. `nativeRuntime` (native.ts) is the real one.
  */
 export interface StraitRuntime {
   platform(): 'ios' | 'android' | 'other';
@@ -244,7 +242,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
   let isFirstLaunch = false;
 
   const rt = async (): Promise<StraitRuntime> =>
-    (runtime ??= await createReactNativeRuntime({ installReferrer: config.installReferrer }));
+    (runtime ??= (await import('./native.js')).nativeRuntime({ installReferrer: config.installReferrer }));
 
   const newId = (at: number) => newOpenId(at);
   // App listeners are isolated: one that throws must not stop the others or
@@ -657,55 +655,6 @@ export function fromExpoClipboard(mod: {
     ...(mod.setStringAsync ? { writeText: async (t: string) => void (await mod.setStringAsync!(t)) } : {}),
   };
 }
-
-/** The real runtime, backed by React Native's Linking, AppState and Dimensions. */
-export async function createReactNativeRuntime(
-  opts: { installReferrer?: () => Promise<string | null> } = {},
-): Promise<StraitRuntime> {
-  // @ts-expect-error optional peer dependency, resolved at app runtime
-  const rn = await import('react-native');
-  const { Linking, AppState, Dimensions, PixelRatio, Platform } = rn;
-  return {
-    storeSheet: reactNativeStoreSheetOpener(rn),
-    platform: () => (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other'),
-    collectDevice: () => ({
-      screenWidth: portraitScreenWidth(Dimensions.get('screen').width, Dimensions.get('screen').height),
-      pixelRatio: PixelRatio.get(),
-      language: deviceLanguage(),
-      timezone: deviceTimezone(),
-    }),
-    getInstallReferrer: async () =>
-      Platform.OS === 'android' && opts.installReferrer ? opts.installReferrer() : null,
-    getInitialURL: () => Linking.getInitialURL(),
-    onURL: (cb) => {
-      const sub = Linking.addEventListener('url', ({ url }: { url: string }) => cb(url));
-      return () => sub.remove();
-    },
-    onAppState: (cb) => {
-      const sub = AppState.addEventListener('change', cb);
-      return () => sub.remove();
-    },
-    now: () => Date.now(),
-  };
-}
-
-function deviceLanguage(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().locale || 'en';
-  } catch {
-    return 'en';
-  }
-}
-
-function deviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'XX';
-  } catch {
-    return 'XX';
-  }
-}
-
-
 
 function destination(url: string | undefined): Pick<LinkEvent, 'url' | 'path' | 'params'> {
   if (!url) return {};

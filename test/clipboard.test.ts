@@ -7,7 +7,8 @@
  * The old app-side `clipboardBoost` flag is ignored.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createStrait, fromExpoClipboard, pasteHandoffOn, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
+import { pasteHandoffOn } from '../src/strait.js';
+import { createStrait, fromExpoClipboard, type ClipboardAccess, type KeyValueStore, type LinkEvent, type StraitRuntime } from '../src/index.js';
 
 const PK = 'st_pub_test_appowner01';
 const ENDPOINT = 'https://hilltop.links.test';
