@@ -17,4 +17,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: node scripts/spec-vectors.mjs
       - run: node scripts/brand.mjs
