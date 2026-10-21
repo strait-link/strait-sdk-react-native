@@ -5,7 +5,7 @@
  */
 // @ts-expect-error optional peer dependency, present in React Native apps
 import { AppState, Dimensions, Linking, NativeModules, PixelRatio, Platform } from 'react-native';
-import { portraitScreenWidth } from './core.js';
+import { deviceClassForSize, portraitScreenWidth } from './core.js';
 import { reactNativeStoreSheetOpener } from './store-sheet.js';
 import type { StraitRuntime } from './strait.js';
 
@@ -19,6 +19,13 @@ export function nativeRuntime(opts: { installReferrer?: () => Promise<string | n
       language: intl('locale', 'en'),
       timezone: intl('timeZone', 'XX'),
     }),
+    // Contract B14: iOS by the device idiom (iPad), Android by the smallest-width rule (sw600dp).
+    deviceClass: () =>
+      Platform.OS === 'ios'
+        ? Platform.isPad ? 'tablet' : 'phone'
+        : Platform.OS === 'android'
+          ? deviceClassForSize(Math.min(Dimensions.get('screen').width, Dimensions.get('screen').height))
+          : undefined,
     getInstallReferrer: async () =>
       Platform.OS === 'android' && opts.installReferrer ? opts.installReferrer() : null,
     getInitialURL: () => Linking.getInitialURL(),

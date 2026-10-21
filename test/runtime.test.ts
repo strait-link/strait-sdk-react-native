@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Mutable per test: the platform and the app's own StraitInstallReferrer module.
 const rn = vi.hoisted(() => ({
-  Platform: { OS: 'ios' },
+  Platform: { OS: 'ios', isPad: false } as { OS: string; isPad?: boolean },
+  screen: { width: 844, height: 390 },
   NativeModules: {
     // The old adapter read this (en_IN, not BCP-47); the runtime must not.
     SettingsManager: { settings: { AppleLocale: 'en_IN' } },
@@ -14,7 +15,7 @@ vi.mock('react-native', () => {
   const sub = { remove() {} };
   return {
     AppState: { addEventListener: () => sub },
-    Dimensions: { get: () => ({ width: 844, height: 390, scale: 3, fontScale: 1 }) },
+    Dimensions: { get: () => ({ ...rn.screen, scale: 3, fontScale: 1 }) },
     Linking: { getInitialURL: async () => null, addEventListener: () => sub },
     NativeModules: rn.NativeModules,
     PixelRatio: { get: () => 3 },
@@ -26,6 +27,36 @@ describe('device fields report the portrait screen width (B17)', () => {
   it('nativeRuntime (the one phone runtime, Metro / index.native)', async () => {
     const { nativeRuntime } = await import('../src/native.js');
     expect(nativeRuntime().collectDevice().screenWidth).toBe(390);
+  });
+});
+
+describe('deviceClass (contract B14): iPad idiom on iOS, smallest width >= 600 dp on Android', () => {
+  afterEach(() => {
+    rn.Platform.OS = 'ios';
+    rn.Platform.isPad = false;
+    rn.screen = { width: 844, height: 390 };
+  });
+  it('iOS: Platform.isPad', async () => {
+    const { nativeRuntime } = await import('../src/native.js');
+    expect(nativeRuntime().deviceClass!()).toBe('phone');
+    rn.Platform.isPad = true;
+    expect(nativeRuntime().deviceClass!()).toBe('tablet');
+  });
+  it('Android: the shorter screen side, in either orientation', async () => {
+    rn.Platform.OS = 'android';
+    const { nativeRuntime } = await import('../src/native.js');
+    expect(nativeRuntime().deviceClass!()).toBe('phone'); // 844×390
+    rn.screen = { width: 1280, height: 800 };
+    expect(nativeRuntime().deviceClass!()).toBe('tablet');
+    rn.screen = { width: 600, height: 960 };
+    expect(nativeRuntime().deviceClass!()).toBe('tablet');
+    rn.screen = { width: 599, height: 960 };
+    expect(nativeRuntime().deviceClass!()).toBe('phone');
+  });
+  it('other platforms: not sent', async () => {
+    rn.Platform.OS = 'web';
+    const { nativeRuntime } = await import('../src/native.js');
+    expect(nativeRuntime().deviceClass!()).toBeUndefined();
   });
 });
 

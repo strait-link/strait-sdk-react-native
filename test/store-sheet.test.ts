@@ -15,8 +15,9 @@ const REFERRER = `strait_link=lnk_42&strait_click=${CLICK}`;
 const HANDOFF = 'https://hilltop.strait.link/h/AbCdEfGhIjKlMnOpQrStUv';
 const device = { screenWidth: 393, pixelRatio: 3, language: 'en-IN', timezone: 'Asia/Kolkata' };
 
-function runtime(platform: 'ios' | 'android', storeSheet?: StoreSheetOpener): StraitRuntime {
+function runtime(platform: 'ios' | 'android', storeSheet?: StoreSheetOpener, deviceClass?: 'phone' | 'tablet'): StraitRuntime {
   return {
+    ...(deviceClass ? { deviceClass: () => deviceClass } : {}),
     platform: () => platform,
     collectDevice: () => device,
     getInstallReferrer: async () => null,
@@ -178,5 +179,19 @@ describe('reactNativeStoreSheetOpener', () => {
     expect(await o.openURL!('market://details?id=a.b')).toBe(true);
     const bare = reactNativeStoreSheetOpener({ NativeModules: {}, Linking: { openURL } });
     expect(bare.androidIntent).toBeUndefined();
+  });
+});
+
+describe('store sheet sends deviceClass (contract B14)', () => {
+  it('in the /v1/store-sheet body when the runtime knows it', async () => {
+    const e = engine({ '/v1/store-sheet': androidReply });
+    const s = createStrait({
+      publishableKey: 'bk_pub_test_appowner01', endpoint: 'https://hilltop.strait.link', fetch: e.fetch,
+      runtime: runtime('android', { androidIntent: async () => true }, 'tablet'),
+    });
+    await s.openStoreSheet('https://hilltop.strait.link/promo');
+    expect(e.calls[0]!.body).toEqual({
+      publishableKey: 'bk_pub_test_appowner01', url: 'https://hilltop.strait.link/promo', platform: 'android', deviceClass: 'tablet',
+    });
   });
 });

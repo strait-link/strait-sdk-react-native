@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `/v1/resolve`, `/v1/open` (queued retries too) and `/v1/store-sheet` now send `deviceClass`
+  (`"phone"` | `"tablet"`, contract B14, engine ADR 0039): iOS by `Platform.isPad`, Android by the
+  screen's shorter side (>= 600 dp = tablet). Left out when unknown; older engines ignore it.
+  New: `deviceClassForSize(shortestSide)`, optional `StraitRuntime.deviceClass()`.
+  Conformance vectors v9.
+
 ## 0.9.1
 
 - Fix: a link that opens the app while the first-launch deferred check is still running is no
