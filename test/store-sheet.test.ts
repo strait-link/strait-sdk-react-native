@@ -125,7 +125,7 @@ describe('strait.openStoreSheet (Android)', () => {
   });
 });
 
-describe('strait.openStoreSheet (iPhone, beta)', () => {
+describe('strait.openStoreSheet (iPhone)', () => {
   it('saves the device match for the tap, then shows the product page', async () => {
     const e = engine({ '/v1/store-sheet': iosReply(), '/v1/match-save': {} });
     const shown: unknown[] = [];
