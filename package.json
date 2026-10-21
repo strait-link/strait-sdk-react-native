@@ -16,10 +16,10 @@
   "homepage": "https://straitlink.in",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bazingga08/strait-sdk-react-native.git"
+    "url": "git+https://github.com/strait-link/strait-sdk-react-native.git"
   },
   "bugs": {
-    "url": "https://github.com/bazingga08/strait-sdk-react-native/issues"
+    "url": "https://github.com/strait-link/strait-sdk-react-native/issues"
   },
   "type": "module",
   "main": "dist/index.js",

@@ -11,7 +11,7 @@
   That is the error npm gives when no trusted publisher is linked (step 2 not done yet).
 - **Re-run plan, after step 2:** re-run only the v0.8.3 run (GitHub, **Actions**, **Release**, the
   `v0.8.3` run, **Re-run jobs**, **Re-run failed jobs**; or
-  `gh run rerun 38208747754 --failed -R bazingga08/strait-sdk-react-native`). Do not re-run v0.8.2:
+  `gh run rerun 38208747754 --failed -R strait-link/strait-sdk-react-native`). Do not re-run v0.8.2:
   0.8.3 supersedes it (once 0.8.3 is out, npm 11 refuses an untagged lower version anyway).
 - Check: `npm view @straitlink/react-native version` prints `0.8.3`, and the npm page shows a
   provenance badge.
@@ -28,7 +28,7 @@ npmjs.com, signed in, avatar menu, **Add Organization**, name: `straitlink`
 ## 1. Publish the first version
 
 ```sh
-git clone https://github.com/bazingga08/strait-sdk-react-native.git
+git clone https://github.com/strait-link/strait-sdk-react-native.git
 cd strait-sdk-react-native
 git checkout main            # or the commit you want to ship
 npm ci
@@ -52,7 +52,7 @@ npmjs.com, package `@straitlink/react-native`, **Settings**, **Trusted Publisher
 
 | Field | Value |
 | --- | --- |
-| Organization or user | `bazingga08` |
+| Organization or user | `strait-link` |
 | Repository | `strait-sdk-react-native` |
 | Workflow filename | `release.yml` |
 | Environment name | (leave empty) |
@@ -70,4 +70,4 @@ works; stray tokens can no longer publish).
 If the publish step fails with 404 or ENEEDAUTH, the trusted-publisher fields do not
 match: check the repo name, that the file is `release.yml`, and that the
 environment field is empty. `repository.url` in package.json must stay
-`git+https://github.com/bazingga08/strait-sdk-react-native.git` (provenance checks it).
+`git+https://github.com/strait-link/strait-sdk-react-native.git` (provenance checks it).
