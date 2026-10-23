@@ -37,5 +37,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/brand.mjs --release
+      - name: Already on npm? (until Trusted Publishing is linked, versions are published by hand)
+        id: published
+        run: |
+          n="$(node -p "require('./package.json').name")"; v="$(node -p "require('./package.json').version")"
+          if npm view "$n@$v" version >/dev/null 2>&1; then echo "::notice::$n@$v is already on npm, nothing to publish"; echo skip=true >> "$GITHUB_OUTPUT"; fi
       - name: Publish to npm (trusted publishing, provenance on)
+        if: steps.published.outputs.skip != 'true'
         run: npm publish --access public --provenance # trusted publishing (OIDC), no NPM_TOKEN
