@@ -1,12 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.9.2
 
 - `/v1/resolve`, `/v1/open` (queued retries too) and `/v1/store-sheet` now send `deviceClass`
   (`"phone"` | `"tablet"`, contract B14, engine ADR 0039): iOS by `Platform.isPad`, Android by the
   screen's shorter side (>= 600 dp = tablet). Left out when unknown; older engines ignore it.
   New: `deviceClassForSize(shortestSide)`, optional `StraitRuntime.deviceClass()`.
   Conformance vectors v9.
+- Docs: iPhone links are live, iPhone install matching is opt-in (off until you choose it) and the
+  store sheet is new, in the README and the `openStoreSheet` doc comment (no "beta" for iPhone).
+  No behaviour change.
 
 ## 0.9.1
 
