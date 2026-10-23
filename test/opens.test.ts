@@ -10,7 +10,7 @@ const CLICK = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
 const OPEN_ID = /^o_[a-z0-9]+_[a-z0-9]{12}$/;
 const device = { screenWidth: 411, pixelRatio: 2.625, language: 'en', timezone: 'Asia/Kolkata' };
 
-function fakeRuntime(opts: { initialURL?: string | null; referrer?: string | null; platform?: 'android' | 'ios' } = {}) {
+function fakeRuntime(opts: { initialURL?: string | null; referrer?: string | null; platform?: 'android' | 'ios'; deviceClass?: () => any } = {}) {
   let urlCb: ((u: string) => void) | null = null;
   let stateCb: ((s: 'active' | 'background' | 'inactive') => void) | null = null;
   let t = 1_800_000_000_000;
@@ -22,6 +22,7 @@ function fakeRuntime(opts: { initialURL?: string | null; referrer?: string | nul
     onURL: (cb) => ((urlCb = cb), () => (urlCb = null)),
     onAppState: (cb) => ((stateCb = cb), () => (stateCb = null)),
     now: () => t,
+    ...(opts.deviceClass ? { deviceClass: opts.deviceClass } : {}),
   };
   return { runtime, tap: (u: string) => urlCb?.(u), setState: (s: 'active' | 'background' | 'inactive') => stateCb?.(s), advance: (ms: number) => (t += ms) };
 }
@@ -375,5 +376,38 @@ describe('first launch and the deferred check (B6/B7 revised)', () => {
     await expect(make(fakeRuntime(), e2, writeOnly as any).strait.start()).resolves.toBeUndefined();
     const e3 = fakeEngine({ '/v1/resolve': RESOLVED });
     await expect(make(fakeRuntime({ initialURL: 'https://links.test/sale' }), e3, writeOnly as any).strait.start()).resolves.toBeUndefined();
+  });
+});
+
+describe('deviceClass (contract B14, engine ADR 0039)', () => {
+  it('short link: /v1/resolve and its offline retry via /v1/open carry it', async () => {
+    const rt = fakeRuntime({ initialURL: 'https://links.test/sale', deviceClass: () => 'tablet' });
+    const engine = fakeEngine({ '/v1/resolve': 'offline' });
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await settle();
+    expect(engine.of('/v1/resolve')[0]!.body.deviceClass).toBe('tablet');
+    engine.routes['/v1/open'] = ACCEPTED;
+    await strait.flushOpenReports();
+    expect(engine.of('/v1/open').at(-1)!.body).toMatchObject({ route: 'app_link', reason: 'network', deviceClass: 'tablet' });
+  });
+  it('direct open report via /v1/open carries it', async () => {
+    const rt = fakeRuntime({ initialURL: 'straitlink://shop.example/p/1', deviceClass: () => 'phone' });
+    const engine = fakeEngine({ '/v1/open': ACCEPTED });
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await settle();
+    expect(engine.of('/v1/open')[0]!.body.deviceClass).toBe('phone');
+  });
+  it('unknown, invalid or throwing: the field is left out and nothing breaks', async () => {
+    for (const deviceClass of [undefined, () => undefined, () => 'watch', () => { throw new Error('x'); }]) {
+      const rt = fakeRuntime({ initialURL: 'https://links.test/sale', deviceClass });
+      const engine = fakeEngine({ '/v1/resolve': RESOLVED });
+      const { strait, events } = make(rt, engine, returning());
+      await strait.start();
+      await settle();
+      expect(events.at(-1)).toMatchObject({ matched: true });
+      expect(engine.of('/v1/resolve')[0]!.body).not.toHaveProperty('deviceClass');
+    }
   });
 });

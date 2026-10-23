@@ -1,5 +1,5 @@
 /**
- * Store sheet (beta; iPhone is beta). Show the app store INSIDE your app for
+ * Store sheet (new). Show the app store INSIDE your app for
  * one of your Strait links and keep the deep link for the app being installed.
  * Same flow as sdk-android `StoreSheet` and sdk-swift `StoreSheet.swift`:
  *
@@ -158,7 +158,11 @@ const attempt = async (f: () => Promise<boolean>): Promise<boolean> => {
 
 /** The flow behind `strait.openStoreSheet` (exported for tests and custom clients). */
 export async function runStoreSheet(
-  deps: { call: Call; publishableKey: string; platform: 'ios' | 'android' | 'other'; device: () => Record<string, unknown> },
+  deps: {
+    call: Call; publishableKey: string; platform: 'ios' | 'android' | 'other'; device: () => Record<string, unknown>;
+    /** Sent as `deviceClass` when set (contract B14). */
+    deviceClass?: 'phone' | 'tablet';
+  },
   url: string,
   options: StoreSheetOptions,
   opener: StoreSheetOpener,
@@ -168,7 +172,8 @@ export async function runStoreSheet(
   let reason: string | undefined;
   let reply: Record<string, any> = {};
   try {
-    const r = await deps.call('POST', '/v1/store-sheet', { publishableKey: deps.publishableKey, url, platform });
+    const dc = deps.deviceClass ? { deviceClass: deps.deviceClass } : {};
+    const r = await deps.call('POST', '/v1/store-sheet', { publishableKey: deps.publishableKey, url, platform, ...dc });
     if (r.ok && r.json.ok === true) reply = r.json;
     else reason = typeof r.json.reason === 'string' ? r.json.reason : `http_${r.status}`;
   } catch {

@@ -120,4 +120,4 @@ export {
   type StoreSheetResult,
   type StoreSheetStyle,
 } from './store-sheet.js';
-export { splitUrl } from './core.js';
+export { splitUrl, deviceClassForSize, type DeviceClass } from './core.js';

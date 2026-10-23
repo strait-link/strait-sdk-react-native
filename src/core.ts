@@ -28,6 +28,20 @@ export function portraitScreenWidth(logicalWidth: number, logicalHeight: number)
   return browserScreenWidth(Math.min(logicalWidth, logicalHeight));
 }
 
+/** What the app runs on, sent as `deviceClass` with open reports and the store sheet (contract B14). */
+export type DeviceClass = 'phone' | 'tablet';
+
+/**
+ * `deviceClass` from the screen's shorter side in logical px / dp (contract B14):
+ * Android's smallest-width rule, `tablet` from 600 (sw600dp), else `phone`;
+ * undefined when the size is unknown (0, negative, not a number). iOS SDKs use
+ * the device model instead (an iPad is a tablet whatever its window size).
+ */
+export function deviceClassForSize(shortestSide: number): DeviceClass | undefined {
+  if (!Number.isFinite(shortestSide) || shortestSide <= 0) return undefined;
+  return shortestSide >= 600 ? 'tablet' : 'phone';
+}
+
 export interface SplitUrl {
   scheme: string;
   host: string;
