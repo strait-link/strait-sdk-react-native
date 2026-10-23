@@ -1,5 +1,5 @@
 /**
- * Store sheet (beta; iPhone is beta). Show the app store INSIDE your app for
+ * Store sheet (new). Show the app store INSIDE your app for
  * one of your Strait links and keep the deep link for the app being installed.
  * Same flow as sdk-android `StoreSheet` and sdk-swift `StoreSheet.swift`:
  *

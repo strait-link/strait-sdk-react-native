@@ -212,7 +212,7 @@ export interface Strait {
     extra?: { value?: number; currency?: string; linkId?: string; clickId?: string },
   ): Promise<boolean>;
   /**
-   * Store sheet (beta; iPhone is beta): show the app store inside your app for
+   * Store sheet (new): show the app store inside your app for
    * one of your short links and keep the deep link for the app being
    * installed. Never throws. See README "Store sheet".
    */

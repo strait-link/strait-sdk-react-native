@@ -16,7 +16,7 @@ A tap opens the exact screen, and every link open and install is recorded in you
 <p align="center">
   <a href="https://github.com/bazingga08/strait-sdk-react-native/tags"><img alt="Latest version" src="https://img.shields.io/github/v/tag/bazingga08/strait-sdk-react-native?sort=semver&label=version&style=flat-square&labelColor=0F0D0A&color=423B33"></a>
   <a href="https://straitlink.in/platform-status/"><img alt="SDK: Beta" src="https://img.shields.io/badge/SDK-beta-423B33?style=flat-square&labelColor=0F0D0A"></a>
-  <a href="https://straitlink.in/docs/iphone-install-matching/"><img alt="iPhone: Beta" src="https://img.shields.io/badge/iPhone-beta-423B33?style=flat-square&labelColor=0F0D0A"></a>
+  <a href="https://straitlink.in/iphone-status/"><img alt="iPhone: Live" src="https://img.shields.io/badge/iPhone-live-423B33?style=flat-square&labelColor=0F0D0A"></a>
   <a href="https://github.com/bazingga08/strait-sdk-react-native/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/bazingga08/strait-sdk-react-native/ci.yml?branch=main&label=CI&style=flat-square&labelColor=0F0D0A"></a>
   <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-423B33?style=flat-square&labelColor=0F0D0A"></a>
 </p>
@@ -44,11 +44,12 @@ the other app SDKs via shared golden vectors (run in CI here).
 | Feature | Status | Notes |
 |---|---|---|
 | Android: direct links and deferred links | ● Live | Exact match through the Play Install Referrer native module. |
-| iPhone: Universal Links and install matching | ◐ Beta | Your choice in Dashboard → Settings → iPhone installs: device matching, paste handoff, both or neither, read from Strait at runtime. Device matching is off by default. iPhone matches are labelled Estimated until measured. |
-| Store sheet: the store inside your app | ◐ Beta | Keeps the deep link through the install. |
+| iPhone links (Universal Links) | ● Live | The links themselves (Apple's Universal Links plus our association file) were proven on a real iPhone with the Swift reference app on 21 Oct 2026. This SDK's iOS glue is covered by unit tests and hasn't run on a real iPhone. |
+| iPhone: install matching (deferred links) | Opt-in | Off until you choose it. Proven on iPhone simulators; the real-iPhone run waits on our App Store listing. Your choice in Dashboard → Settings → iPhone installs: device matching, paste handoff, both or neither, read from Strait at runtime. Device matching is off by default. iPhone matches are labelled Estimated until measured. |
+| Store sheet: the store inside your app | New | Keeps the deep link through the install. On iPhone it needs your app's App Store ID. |
 | Published on npm | ● Live | `npm install @straitlink/react-native` |
 
-● Live · ◐ Beta · ○ Planned · – Not yet. The same words as the [platform status](https://straitlink.in/platform-status/) page.
+● Live · ◐ Beta · ○ Planned · – Not yet · Opt-in: off until you switch it on · New: released, still young. The same words as the [platform status](https://straitlink.in/platform-status/) page.
 
 ## Install
 
@@ -180,7 +181,7 @@ never a cross-app identity.
 How iPhone install matching works, what is kept (IP only as a keyed hash, for 1 hour)
 and the App Store privacy label to use: https://straitlink.in/docs/iphone-install-matching/ .
 
-### iPhone (beta): you choose the deferred-link method (contract B19)
+### iPhone: you choose the deferred-link method (contract B19)
 
 You make the choice in **Dashboard → Settings → iPhone installs**, with two switches.
 It applies at runtime: the SDK reads both switches from Strait's `/v1/match` reply
@@ -244,7 +245,7 @@ module named `StraitInstallReferrer` exposing `getInstallReferrer(): Promise<str
 Android installs resolve exactly; without one, Android falls back to the fingerprint
 path automatically.
 
-## Store sheet (beta; iPhone is beta)
+## Store sheet (new)
 
 When a user taps **Install** for one of your other apps (a sibling, partner or
 "lite" app), show the app store *inside your app* and keep the deep link for the
@@ -277,7 +278,7 @@ The in-app sheet needs a small native module named `StraitStoreSheet` in your ap
 Without the module the SDK uses `Linking.openURL`: the Play app (`market://`,
 deep link still kept) or the App Store app (`itms-apps://`, match still saved),
 so the user leaves your app. The tap is recorded with `sent_to = store_sheet`
-and is not billed during the beta. It works only where your app is the host: a
+and is not billed while the store sheet is new. It works only where your app is the host: a
 link tapped inside another company's app can't open a store sheet there.
 
 ## Testing in non-RN contexts
