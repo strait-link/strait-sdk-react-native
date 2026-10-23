@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AppStateTracker, browserScreenWidth, portraitScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
-  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl,
+  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize,
   ATTRIBUTION_WINDOW_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
 
@@ -28,6 +28,9 @@ describe('conformance vectors', () => {
   it.each(v.screenWidth)('browserScreenWidth($logical)', ({ logical, expected }) => {
     expect(browserScreenWidth(logical)).toBe(expected);
   });
+  it.each(v.deviceClass)('deviceClassForSize($shortestSide)', ({ shortestSide, expected }) => {
+    expect(deviceClassForSize(shortestSide) ?? null).toBe(expected);
+  });
   it.each(v.portraitScreenWidth)('portraitScreenWidth($width, $height)', ({ width, height, expected }) => {
     expect(portraitScreenWidth(width, height)).toBe(expected);
   });
@@ -43,8 +46,8 @@ describe('conformance vectors', () => {
   it.each(v.parseHandoffUrl)('parseHandoffUrl: $name', ({ text, linkHosts, expected }) => {
     expect(parseHandoffUrl(text, linkHosts)).toBe(expected);
   });
-  it('vectors v8', () => {
-    expect(v.version).toBe(8);
+  it('vectors v9', () => {
+    expect(v.version).toBe(9);
   });
   it.each(v.takeClickId)('takeClickId($input)', ({ input, expected }) => {
     expect(takeClickId(input)).toEqual(expected);

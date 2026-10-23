@@ -129,6 +129,12 @@ opened) from **existing users** (already had the app). The deferred check is
 only marked done once the server answered, so an offline first launch is
 retried on the next launch.
 
+Open reports and the store sheet also say whether the app runs on a phone or a
+tablet (`deviceClass`, contract B14): on iOS from `Platform.isPad`, on Android
+from the screen's shorter side (600 dp or more = tablet). iPad Safari sends a Mac
+user agent, so this is the only way Strait can count iPad opens. A custom
+`runtime` can supply `deviceClass()` itself (`deviceClassForSize` is exported).
+
 ### Conversion events (revenue on the exact tap)
 
 ```ts

@@ -22,9 +22,20 @@ import {
   replyReferralCode,
   shouldRetryReport,
   splitUrl,
+  type DeviceClass,
 } from './core.js';
 
-export { browserScreenWidth, portraitScreenWidth, splitUrl, parseHandoffUrl } from './core.js';
+export { browserScreenWidth, portraitScreenWidth, splitUrl, parseHandoffUrl, deviceClassForSize, type DeviceClass } from './core.js';
+
+/** `{ deviceClass }` when the runtime knows it (contract B14), else nothing; never throws. */
+const deviceClassOf = (r: StraitRuntime): { deviceClass?: DeviceClass } => {
+  try {
+    const dc = r.deviceClass?.();
+    return dc === 'phone' || dc === 'tablet' ? { deviceClass: dc } : {};
+  } catch {
+    return {};
+  }
+};
 
 /** B21: `{ referralCode }` for a matched deferred reply that carries a valid code, else nothing. */
 const referral = (matched: boolean, code: unknown): { referralCode?: string } => {
@@ -80,6 +91,12 @@ export interface StraitRuntime {
   now(): number;
   /** How the store sheet opens stores (optional; the React Native runtimes supply one). */
   storeSheet?: StoreSheetOpener;
+  /**
+   * What the app runs on, sent as `deviceClass` with /v1/resolve, /v1/open and
+   * /v1/store-sheet (contract B14); undefined = not sent. iPadOS Safari sends a
+   * Mac user agent, so only the app can tell the engine it is a tablet.
+   */
+  deviceClass?(): DeviceClass | undefined;
 }
 
 /** Persistent key/value storage, e.g. @react-native-async-storage/async-storage. */
@@ -338,7 +355,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
   /** POST /v1/open; resolves the HTTP status, or null when there was no answer. */
   const sendReport = async (report: OpenReport): Promise<number | null> => {
     try {
-      return (await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report })).status;
+      const dc = deviceClassOf(await rt());
+      return (await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report, ...dc })).status;
     } catch {
       return null;
     }
@@ -390,6 +408,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       try {
         const { json } = await call('POST', '/v1/resolve', {
           publishableKey: config.publishableKey, url: base.url, platform, openId: id, appState, firstLaunch, at: t0,
+          ...deviceClassOf(r),
         });
         const matched = json.matched === true;
         const reason = matched ? undefined : json.reason ?? json.error;
@@ -553,7 +572,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         const clip = config.clipboard?.writeText ? (t: string) => config.clipboard!.writeText!(t) : undefined;
         const opener: StoreSheetOpener = { ...base, ...(base.writeClipboard || !clip ? {} : { writeClipboard: clip }) };
         return await runStoreSheet(
-          { call, publishableKey: config.publishableKey, platform: r.platform(), device: () => ({ ...r.collectDevice() }) },
+          { call, publishableKey: config.publishableKey, platform: r.platform(), device: () => ({ ...r.collectDevice() }), ...deviceClassOf(r) },
           url,
           options,
           opener,
