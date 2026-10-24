@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Strait example",
+    "slug": "strait-example-expo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "straitexample",
+    "ios": { "bundleIdentifier": "com.straitlink.example.expo" },
+    "android": { "package": "com.straitlink.example.expo" }
+  }
+}
