@@ -316,6 +316,14 @@ const strait = createStrait({
 });
 ```
 
+## Example app
+
+[`examples/expo`](examples/expo) opens a deep link, shows the deferred link and logs a `purchase` event, built against this repo's source (CI type-checks it and runs `expo export` on every PR).
+
+1. `npm ci` here, then `cd examples/expo && npm ci`; `cp .env.example .env` and set your publishable key (`st_pub_…`).
+2. `npx expo run:android` (or `run:ios`).
+3. `npx uri-scheme open "straitexample://product/42" --android` and watch the log on screen.
+
 ## Docs and support
 
 - **Docs:** [straitlink.in/docs/sdks/react-native/](https://straitlink.in/docs/sdks/react-native/) · [platform status](https://straitlink.in/platform-status/) · [troubleshooting](https://straitlink.in/docs/troubleshooting/)
