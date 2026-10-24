@@ -183,6 +183,34 @@ It is absent when there is no code, no match, or the engine doesn't send one.
 Referrals are a preview and are not switched on yet; grant rewards from your server
 (the `referral.converted` webhook), not in the app.
 
+## Check your setup (doctor)
+
+Most "the link opens the browser, not the app" reports are setup: the app isn't listed for your link
+domain, or a secret key is in the app. `doctor()` checks the key, the endpoint and your link domain's
+`assetlinks.json` (Android) / `apple-app-site-association` (iOS) in one request (contract B23). Call it
+in debug builds; it never throws. React Native can't read your package or bundle ID without a native
+module, so pass them (left out, doctor lists what your domain has instead):
+
+```ts
+if (__DEV__) {
+  links.doctor({ androidPackage: 'com.example.app', iosBundleId: 'com.example.app' });
+}
+```
+
+**You should see** (Metro log, Android):
+
+```
+[Strait doctor] ok key.ok: Publishable key is set
+[Strait doctor] ok app.listed: hilltop.strait.link lists com.example.app
+```
+
+An `error` line ends with what to do, e.g. `error app.missing: hilltop.strait.link doesn't list
+com.example.app. Fix: Add com.example.app in Dashboard → Apps & stores (listed now: …)`. It returns
+`{ ok, findings: [{ id, severity, title, fix }] }`; `ok` is false when any finding is an `error`. On
+Android, pass `certSha256: ['AB:CD:…']` (from `./gradlew signingReport`) to also check this build's
+signing certificate. The free web checker and the docs cover what the app can't see (intent filters,
+Associated Domains).
+
 ## How it matches
 
 | Platform | Method | Precision |

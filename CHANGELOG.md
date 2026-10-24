@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.3
+
+- New: `strait.doctor({ androidPackage?, iosBundleId?, certSha256? })`, a setup check for debug builds
+  (contract B23, shared-spec ADR 0002). One GET of your link domain's `/.well-known/assetlinks.json`
+  (Android) or `/.well-known/apple-app-site-association` (iOS), then checks the key (secret key in the
+  app?), the endpoint, whether the file lists your app and (Android, when you pass it) this build's
+  signing certificate. Never throws; logs each finding with `[Strait doctor]` in `__DEV__` only; returns
+  `{ ok, findings }`. The same finding ids and wording as every Strait SDK. Also exported: the pure
+  `doctorFindings(...)` and the `DoctorFinding` / `DoctorReport` types. React Native can't read the
+  package or bundle ID without a native module, so they are options (left out: `app.unknown`).
+  No other behaviour change.
+
 ## 0.9.2
 
 - `/v1/resolve`, `/v1/open` (queued retries too) and `/v1/store-sheet` now send `deviceClass`

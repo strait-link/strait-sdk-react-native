@@ -24,6 +24,7 @@ import {
   splitUrl,
   type DeviceClass,
 } from './core.js';
+import { doctorFindings, doctorHost, type DoctorReport } from './doctor.js';
 
 export { browserScreenWidth, portraitScreenWidth, splitUrl, parseHandoffUrl, deviceClassForSize, type DeviceClass } from './core.js';
 
@@ -221,6 +222,14 @@ export interface Strait {
   pendingOpenReports(): Promise<number>;
   /** Send saved open reports now (also happens on start and on resume). */
   flushOpenReports(): Promise<void>;
+  /**
+   * Setup check for debug builds (contract B23): the key, the endpoint, and whether your link
+   * domain's assetlinks.json (Android) / apple-app-site-association (iOS) lists this app (Android:
+   * also this build's signing certificate). React Native can't read the package or bundle ID
+   * without a native module, so pass them; left out = `app.unknown`. One GET, never throws, logs
+   * each finding with `[Strait doctor]` in __DEV__ only, returns the report.
+   */
+  doctor(options?: { androidPackage?: string; iosBundleId?: string; certSha256?: string[] }): Promise<DoctorReport>;
   stop(): void;
 }
 
@@ -285,28 +294,29 @@ export function createStrait(config: CreateStraitConfig): Strait {
 
   // RN's Android fetch has no timeout of its own: a stalled reply would hang
   // start() and the open queue. Throws like an offline fetch ('network').
-  const call = async (method: 'GET' | 'POST', path: string, body?: unknown) => {
+  const timed = async <T,>(run: (signal: AbortSignal) => Promise<T>): Promise<T> => {
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => { abort.abort(); reject(new Error('timeout')); }, HTTP_TIMEOUT_MS);
     });
-    const request = (async () => {
-      const res = await doFetch(`${base}${path}`, {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: abort.signal,
-      });
-      const json = await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, json: json as Record<string, any> };
-    })();
     try {
-      return await Promise.race([request, timeout]);
+      return await Promise.race([run(abort.signal), timeout]);
     } finally {
       clearTimeout(timer);
     }
   };
+  const call = (method: 'GET' | 'POST', path: string, body?: unknown) =>
+    timed(async (signal) => {
+      const res = await doFetch(`${base}${path}`, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        signal,
+      });
+      const json = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, json: json as Record<string, any> };
+    });
 
   // ── Remembered tap (B15/B16): the tap id of the last attributed link open,
   // sent with conversion events. Short links and deferred matches learn it
@@ -647,6 +657,34 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return serial(async () => (await readQueue()).length);
     },
     flushOpenReports: () => flush(),
+    async doctor(options = {}) {
+      let platform: 'ios' | 'android' | 'other' = 'other';
+      try {
+        platform = (await rt()).platform();
+      } catch {
+        // no phone runtime: key and endpoint checks only
+      }
+      let file: { status?: number; body?: string } | undefined;
+      if (platform !== 'other' && doctorHost(config.endpoint ?? '')) {
+        const path = platform === 'android' ? 'assetlinks.json' : 'apple-app-site-association';
+        file = await timed(async (signal) => {
+          const res = await doFetch(`${base}/.well-known/${path}`, { method: 'GET', signal });
+          return { status: res.status, body: await res.text() };
+        }).catch(() => ({}));
+      }
+      const report = doctorFindings({
+        publishableKey: config.publishableKey,
+        endpoint: config.endpoint,
+        platform: platform === 'ios' ? 'ios' : 'android',
+        appId: platform === 'ios' ? options.iosBundleId : options.androidPackage,
+        certSha256: options.certSha256,
+        file,
+      });
+      if ((globalThis as { __DEV__?: boolean }).__DEV__ === true) {
+        for (const f of report.findings) console.log(`[Strait doctor] ${f.severity} ${f.id}: ${f.title}${f.fix ? `. Fix: ${f.fix}` : ''}`);
+      }
+      return report;
+    },
     stop() {
       for (const u of unsubs.splice(0)) u();
     },

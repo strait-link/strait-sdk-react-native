@@ -121,3 +121,4 @@ export {
   type StoreSheetStyle,
 } from './store-sheet.js';
 export { splitUrl, deviceClassForSize, type DeviceClass } from './core.js';
+export { doctorFindings, type DoctorFinding, type DoctorReport } from './doctor.js';
