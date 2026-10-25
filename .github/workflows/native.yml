@@ -1,0 +1,57 @@
+name: Native builds (New Architecture)
+# examples/expo built for real on both platforms: React Native 0.86 runs only the New Architecture
+# (TurboModules, Fabric, bridgeless), so a green build here is the SDK + config plugin + the
+# Play Install Referrer helper compiling and linking on it. The plugin's native output is checked too.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prebuild (config plugin → AndroidManifest.xml)
+        working-directory: examples/expo
+        run: |
+          npm ci
+          npx expo prebuild --platform android --no-install
+          node scripts/check-prebuild.mjs
+          grep -qx 'newArchEnabled=true' android/gradle.properties
+      - name: Release build (JS bundled, New Architecture)
+        working-directory: examples/expo/android
+        run: ./gradlew assembleRelease --no-daemon
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prebuild (config plugin → entitlements, Info.plist) + pod install
+        working-directory: examples/expo
+        run: |
+          npm ci
+          npx expo prebuild --platform ios
+          node scripts/check-prebuild.mjs
+      - name: Release build for the Simulator (JS bundled, New Architecture)
+        working-directory: examples/expo/ios
+        run: |
+          xcodebuild -workspace Straitexample.xcworkspace -scheme Straitexample -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO -quiet
