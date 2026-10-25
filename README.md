@@ -66,6 +66,8 @@ curl -s https://<your-handle>.strait.link/v1/resolve -H 'Content-Type: applicati
 | iPhone links (Universal Links) | ● Live | The links themselves (Apple's Universal Links plus our association file) were proven on a real iPhone with the Swift reference app on 21 Oct 2026. This SDK's iOS glue is covered by unit tests and hasn't run on a real iPhone. |
 | iPhone: install matching (deferred links) | Opt-in | Off until you choose it. Proven on iPhone simulators; the real-iPhone run waits on our App Store listing. Your choice in Dashboard → Settings → iPhone installs: device matching, paste handoff, both or neither, read from Strait at runtime. Device matching is off by default. iPhone matches are labelled Estimated until measured. |
 | Store sheet: the store inside your app | New | Keeps the deep link through the install. On iPhone it needs your app's App Store ID. |
+| Expo config plugin | New | Writes Associated Domains, the App Links filter (`autoVerify`) and the scheme from `app.json`. |
+| New Architecture (bridgeless, Fabric) | ● Live | Built and run on Android and iOS in the example app. |
 | Published on npm | ● Live | `npm install @straitlink/react-native` |
 
 ● Live · ◐ Beta · ○ Planned · – Not yet · Opt-in: off until you switch it on · New: released, still young. The same words as the [platform status](https://straitlink.in/platform-status/) page.
@@ -82,6 +84,34 @@ Don't try other package names.
 
 Android's exact deferred match also wants the Play Install Referrer
 (optional but recommended): see "Android" below.
+
+### Expo: the config plugin
+
+Add the plugin with your link domain (Dashboard → Get started) and, if you use one, your custom scheme:
+
+```json
+{
+  "expo": {
+    "plugins": [["@straitlink/react-native", { "domains": ["<your-handle>.strait.link"], "scheme": "yourapp" }]]
+  }
+}
+```
+
+`npx expo prebuild` (or `npx expo run:android` / `run:ios`, or an EAS build) then writes the iOS Associated
+Domains entitlement (`applinks:<your-handle>.strait.link`), an Android App Links intent filter with
+`android:autoVerify="true"` and the URL scheme on both platforms. It fills Expo's own `ios.associatedDomains`,
+`android.intentFilters` and `scheme` fields, keeps what you already have there and adds nothing twice.
+Several domains (a custom domain too) go in the same list. Expo Go can't open your links: use a development build.
+
+**You should see:** after `npx expo prebuild`, `android/app/src/main/AndroidManifest.xml` has
+`<intent-filter android:autoVerify="true">` with `android:host="<your-handle>.strait.link"`, and
+`ios/<App>/<App>.entitlements` lists `applinks:<your-handle>.strait.link`.
+
+### New Architecture
+
+Works on React Native's New Architecture (TurboModules, Fabric, bridgeless) and on the old one. React Native
+0.82 and later only have the New Architecture; the example app (React Native 0.86, Expo 57) is built for
+Android and iOS on every change and opens Strait links on the Android emulator and the iOS Simulator.
 
 ## Use
 
@@ -346,7 +376,7 @@ const strait = createStrait({
 
 ## Example app
 
-[`examples/expo`](examples/expo) opens a deep link, shows the deferred link and logs a `purchase` event, built against this repo's source (CI type-checks it and runs `expo export` on every PR).
+[`examples/expo`](examples/expo) opens a deep link on the right screen, shows the deferred link and logs a `purchase` event, built against this repo's source with the config plugin. CI type-checks it, runs `expo export`, checks the plugin's prebuild output and builds it for Android and iOS on every PR.
 
 1. `npm ci` here, then `cd examples/expo && npm ci`; `cp .env.example .env` and set your publishable key (`st_pub_…`).
 2. `npx expo run:android` (or `run:ios`).

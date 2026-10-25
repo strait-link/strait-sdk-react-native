@@ -5,8 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "scheme": "straitexample",
     "ios": { "bundleIdentifier": "com.straitlink.example.expo" },
-    "android": { "package": "com.straitlink.example.expo" }
+    "android": { "package": "com.straitlink.example.expo" },
+    "plugins": [
+      ["@straitlink/react-native", { "domains": ["strait-dev.strait.link"], "scheme": "straitexample" }]
+    ]
   }
 }

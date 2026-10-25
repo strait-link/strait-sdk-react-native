@@ -22,3 +22,6 @@ jobs:
       - name: Build the example app against this repo (examples/expo)
         working-directory: examples/expo
         run: npm ci && npm run build
+      - name: Expo config plugin output (examples/expo prebuild)
+        working-directory: examples/expo
+        run: npx expo prebuild --no-install && node scripts/check-prebuild.mjs
