@@ -376,7 +376,7 @@ const strait = createStrait({
 
 ## Size and speed
 
-Measured 25 Oct 2026 on 0.9.3.
+Measured 25 Oct 2026 on 0.9.3. 0.10.0 adds the Expo config plugin (3.1 KB, `app.plugin.cjs`): it runs at prebuild and is not in your JS bundle.
 
 | What | Size or time | How it was measured |
 |---|---|---|
