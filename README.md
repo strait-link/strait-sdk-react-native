@@ -344,6 +344,16 @@ const strait = createStrait({
 });
 ```
 
+## Size and speed
+
+Measured 25 Oct 2026 on 0.9.3.
+
+| What | Size or time | How it was measured |
+|---|---|---|
+| npm package | 36.5 KB download, 115 KB unpacked, no dependencies (`react-native` is a peer) | `npm pack --dry-run` |
+| In your JS bundle | 23.3 KB minified, 8.7 KB gzip | esbuild 0.25 `--bundle --minify` of the whole entry (Metro doesn't tree-shake) |
+| Start-up | 2.1 ms to load the module + 0.26 ms for `createStrait(...)` | fresh Node 26 process on an M-series Mac with an injected runtime, median of 25. No network: the first-launch check runs after `start()` |
+
 ## Example app
 
 [`examples/expo`](examples/expo) opens a deep link, shows the deferred link and logs a `purchase` event, built against this repo's source (CI type-checks it and runs `expo export` on every PR).
