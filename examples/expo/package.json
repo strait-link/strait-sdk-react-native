@@ -8,8 +8,10 @@
     "expo": "57.0.27",
     "expo-status-bar": "57.0.1",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-play-install-referrer": "2.0.1"
+    "react-native-play-install-referrer": "2.0.1",
+    "react-native-web": "0.21.2"
   },
   "devDependencies": {
     "@types/react": "19.2.18",
@@ -20,7 +22,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "build": "tsc --noEmit && expo export --platform android --platform ios --output-dir dist"
+    "build": "tsc --noEmit && expo export --platform android --platform ios --platform web --output-dir dist"
   },
   "private": true
 }

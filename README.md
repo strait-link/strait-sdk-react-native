@@ -68,6 +68,7 @@ curl -s https://<your-handle>.strait.link/v1/resolve -H 'Content-Type: applicati
 | Store sheet: the store inside your app | New | Keeps the deep link through the install. On iPhone it needs your app's App Store ID. |
 | Expo config plugin | New | Writes Associated Domains, the App Links filter (`autoVerify`) and the scheme from `app.json`. |
 | New Architecture (bridgeless, Fabric) | ● Live | Built and run on Android and iOS in the example app. |
+| Web (react-native-web, Expo web) | New | Links in the page URL open and are reported. A website has no install, so no deferred check runs and no visit counts as an install. The example app is built for the web in CI. |
 | Published on npm | ● Live | `npm install @straitlink/react-native` |
 
 ● Live · ◐ Beta · ○ Planned · – Not yet · Opt-in: off until you switch it on · New: released, still young. The same words as the [platform status](https://straitlink.in/platform-status/) page.
