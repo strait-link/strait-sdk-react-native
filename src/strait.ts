@@ -101,7 +101,8 @@ export interface StraitRuntime {
   /**
    * True on react-native-web (Expo web). A website has no install, so start()
    * never counts a first launch there: no deferred check, no install recorded.
-   * Links in the page URL still open and are reported. Left out = an app.
+   * A page URL is reported as an open only when it carries a Strait tap id
+   * (strait_click); other page URLs reach the link callback, unreported. Left out = an app.
    */
   isWeb?(): boolean;
 }
@@ -409,10 +410,17 @@ export function createStrait(config: CreateStraitConfig): Strait {
     directArrived = true;
     const r = await rt();
     const t0 = r.now();
-    const id = newId(t0);
-    const platform = r.platform();
+    // Web: the page URL is the page itself (never a short link to resolve). It
+    // counts as an open only when it carries a Strait tap id (strait_click, the
+    // engine adds it when it sends a tap to the web), under openId web-<tap id>
+    // so a reload or a shared landing URL is one open. Else it is a page view:
+    // the link callback still fires for routing, nothing is reported.
+    const web = r.isWeb?.() === true;
+    const c = classifyUrl(raw, web ? [] : linkHosts);
+    const webTap = web && c && !c.needsResolve ? c.clickId : null;
+    const id = webTap ? `web-${webTap}` : newId(t0);
+    const platform = web ? 'web' : r.platform();
     announce({ id, kind: 'direct', appState, rawUrl: raw, at: t0 });
-    const c = classifyUrl(raw, linkHosts);
     if (!c) {
       return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'invalid_url', ms: r.now() - t0, at: t0 });
     }
@@ -442,7 +450,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     }
     if (c.clickId) noteTap(c.clickId, t0);
     // Navigation never waits for the report.
-    void report({
+    if (!web || webTap) void report({
       openId: id, kind: 'direct', route: c.route, appState, platform, url: reportUrl(c.url),
       clickId: c.clickId ?? undefined, matched: true, firstLaunch, at: t0,
     });

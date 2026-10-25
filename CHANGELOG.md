@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Fix (react-native-web / Expo web): web opens are counted only for landings from a Strait tap. Until
+  now every page load with a URL was reported as a direct link open (`/v1/open`, `matched: true`), so
+  web "opens" were page views. Now a page URL that carries a valid `strait_click` (the tap id the
+  engine adds when it sends a tap to the web; needs an engine with web tap ids) sends one `/v1/open`
+  with `platform: 'web'`, the tap's `clickId` and `openId` `web-<tap id>`, so a reload or a shared
+  landing URL is de-duplicated by the engine; the tap attributes later events. Any other page URL
+  still reaches the link callback (`matched: true`, for routing) but sends no `/v1/open` and no
+  `/v1/resolve`. Apps (`isWeb()` false or left out) are unchanged. Same rule in `@straitlink/web`
+  and `strait_sdk` (Flutter web).
+
 ## 0.10.1
 
 - Fix (react-native-web / Expo web): a website has no install, so `start()` no longer counts a first
