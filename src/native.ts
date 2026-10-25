@@ -13,6 +13,7 @@ export function nativeRuntime(opts: { installReferrer?: () => Promise<string | n
   return {
     storeSheet: reactNativeStoreSheetOpener({ NativeModules, Linking }),
     platform: () => (Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'other'),
+    isWeb: () => Platform.OS === 'web',
     collectDevice: () => ({
       screenWidth: portraitScreenWidth(Dimensions.get('screen').width, Dimensions.get('screen').height),
       pixelRatio: PixelRatio.get(),

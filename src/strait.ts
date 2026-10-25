@@ -98,6 +98,12 @@ export interface StraitRuntime {
    * Mac user agent, so only the app can tell the engine it is a tablet.
    */
   deviceClass?(): DeviceClass | undefined;
+  /**
+   * True on react-native-web (Expo web). A website has no install, so start()
+   * never counts a first launch there: no deferred check, no install recorded.
+   * Links in the page URL still open and are reported. Left out = an app.
+   */
+  isWeb?(): boolean;
 }
 
 /** Persistent key/value storage, e.g. @react-native-async-storage/async-storage. */
@@ -604,7 +610,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       const initial = await r.getInitialURL().catch(() => null);
       // Unreadable storage counts as "already checked": never risk a stale
       // deferred jump on every launch. Write failures are ignored (never throw).
-      const firstLaunch = (await storage.getItem(DEFERRED_FLAG).catch(() => '1')) !== '1';
+      const firstLaunch = r.isWeb?.() !== true && (await storage.getItem(DEFERRED_FLAG).catch(() => '1')) !== '1';
       isFirstLaunch = firstLaunch;
       const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
       if (initial) {

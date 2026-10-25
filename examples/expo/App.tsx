@@ -16,7 +16,8 @@ const strait = configured
   : null;
 // React Native's New Architecture (Fabric renderer, bridgeless), shown so a build proves which one it ran on.
 const g = globalThis as { RN$Bridgeless?: boolean; nativeFabricUIManager?: unknown };
-const architecture = `${g.nativeFabricUIManager ? 'Fabric' : 'Paper'}, ${g.RN$Bridgeless ? 'bridgeless' : 'bridge'}`;
+const architecture =
+  Platform.OS === 'web' ? 'web (react-native-web)' : `${g.nativeFabricUIManager ? 'Fabric' : 'Paper'}, ${g.RN$Bridgeless ? 'bridgeless' : 'bridge'}`;
 
 // The screen a link path opens. A real app would call its router here (Expo Router: router.push(e.path)).
 function screenFor(path?: string) {
