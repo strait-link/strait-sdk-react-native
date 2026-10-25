@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.1
+
+- Fix (react-native-web / Expo web): a website has no install, so `start()` no longer counts a first
+  launch there. 0.10.0 and earlier reported the first page load of every new browser as the install's
+  first open (`/v1/open` with `firstLaunch: true`, which the engine records as an install), and ran the
+  deferred check (`/v1/match`) when the page URL was empty. Links in the page URL still open, are
+  reported and attribute events. Same rule as `strait_sdk` 0.9.6 (Flutter web). New optional
+  `StraitRuntime.isWeb()`; the built-in runtime sets it from `Platform.OS === 'web'`.
+- `examples/expo` builds for the web too (`react-native-web` 0.21.2, `react-dom` 19.2.3), in CI.
+
 ## 0.10.0
 
 - New: an Expo config plugin. `"plugins": [["@straitlink/react-native", { "domains": ["acme.strait.link"], "scheme": "acme" }]]`
