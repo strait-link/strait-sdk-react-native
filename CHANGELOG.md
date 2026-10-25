@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.0
+
+- New: an Expo config plugin. `"plugins": [["@straitlink/react-native", { "domains": ["acme.strait.link"], "scheme": "acme" }]]`
+  and `npx expo prebuild` writes the iOS Associated Domains entitlement, an Android App Links intent
+  filter with `android:autoVerify="true"` (https, BROWSABLE + DEFAULT) and the URL scheme on both
+  platforms. It fills Expo's own `ios.associatedDomains`, `android.intentFilters` and `scheme`, keeps
+  what app.json already has, adds nothing twice and refuses bad values (paths, `http`, wildcards,
+  `http`/`https` as a scheme) with a clear message. No new dependency (ADR 0001).
+- New Architecture: checked on React Native 0.86 (bridgeless, Fabric) on Android and iOS with the
+  example app, including `react-native-play-install-referrer` 2.0.1. Nothing needed changing; CI now
+  builds the example natively on both platforms (`native.yml`).
+- No change to the JS API.
+
 ## 0.9.3
 
 - New: `strait.doctor({ androidPackage?, iosBundleId?, certSha256? })`, a setup check for debug builds

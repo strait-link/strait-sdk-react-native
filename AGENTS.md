@@ -16,8 +16,9 @@ npm install @straitlink/react-native @react-native-async-storage/async-storage r
 ```
 
 Link settings: Android App Links intent filter (`autoVerify`) for `https://<handle>.strait.link` plus the custom
-scheme; iPhone Associated Domains `applinks:<handle>.strait.link` plus the URL scheme. Expo: `scheme`,
-`android.intentFilters`, `ios.associatedDomains` in `app.json`.
+scheme; iPhone Associated Domains `applinks:<handle>.strait.link` plus the URL scheme. Expo: add the config
+plugin, `"plugins": [["@straitlink/react-native", { "domains": ["<handle>.strait.link"], "scheme": "<scheme>" }]]`
+in `app.json`, and run `npx expo prebuild`; it writes all three (don't hand-write them as well).
 
 ## Keys (the rule agents get wrong most)
 
