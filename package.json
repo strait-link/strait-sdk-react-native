@@ -1,6 +1,6 @@
 {
   "name": "@straitlink/react-native",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Deep linking for React Native: direct links (App Links, Universal Links, custom schemes), deferred links that survive the install (Play Install Referrer, iPhone device matching or paste handoff, the workspace's choice) and link-open analytics.",
   "keywords": [
     "react-native",
