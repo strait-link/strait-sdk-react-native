@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.2 (26 Oct 2026)
 
 - Fix (react-native-web / Expo web): web opens are counted only for landings from a Strait tap. Until
   now every page load with a URL was reported as a direct link open (`/v1/open`, `matched: true`), so
