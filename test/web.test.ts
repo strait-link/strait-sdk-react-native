@@ -3,8 +3,9 @@ import { createStrait, type KeyValueStore, type LinkEvent, type StraitRuntime } 
 
 // react-native-web (Expo web): there is no install on the web, so the once-per-install
 // deferred check never runs and an open never counts as a first launch (the engine
-// would record a website visit as an install). Links in the page URL still open,
-// are reported and attribute events. Same rule as strait_sdk 0.9.6 (Flutter web).
+// would record a website visit as an install). A page URL is reported as an open only
+// when it carries a Strait tap id (strait_click); other page URLs still reach the link
+// callback for routing but are never reported. Same rule in sdk-web and Flutter web.
 
 const CLICK = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
 
@@ -46,16 +47,53 @@ describe('react-native-web', () => {
     expect(t.events).toEqual([]);
   });
 
-  it('a link in the page URL opens and is reported, never as a first launch', async () => {
-    const t = setup({ initialURL: `https://shop.example.com/p/42?color=red&strait_click=${CLICK}` });
+  // A web open is counted only for a landing from a Strait tap: the engine appends
+  // strait_click=<tap id> when it sends a tap to the web. Anything else is a page view.
+  it('a landing with strait_click sends one /v1/open joined to the tap, under openId web-<tap id>', async () => {
+    const t = setup({ initialURL: `https://shop.example.com/p/42?color=red&strait_click=${CLICK.toUpperCase()}` });
     await t.strait.start();
     await t.strait.flushOpenReports();
     await settle();
     expect(t.events).toHaveLength(1);
-    expect(t.events[0]).toMatchObject({ matched: true, path: '/p/42', params: { color: 'red' } });
+    expect(t.events[0]).toMatchObject({ id: `web-${CLICK}`, matched: true, path: '/p/42', params: { color: 'red' } });
     const opens = t.calls.filter((c) => c.path === '/v1/open');
-    expect(opens.length).toBeGreaterThan(0);
-    expect(opens[0]!.body).toMatchObject({ firstLaunch: false, clickId: CLICK });
+    expect(opens).toHaveLength(1);
+    expect(opens[0]!.body).toMatchObject({
+      openId: `web-${CLICK}`, kind: 'direct', route: 'app_link', platform: 'web',
+      url: 'https://shop.example.com/p/42', clickId: CLICK, matched: true, firstLaunch: false,
+    });
+    await t.strait.trackEvent('purchase');
+    expect(t.calls.find((c) => c.path === '/v1/event')!.body).toMatchObject({ clickId: CLICK });
+  });
+
+  it('a reload of the same landing reports the same openId (the engine de-duplicates it)', async () => {
+    const url = `https://shop.example.com/p/42?strait_click=${CLICK}`;
+    const a = setup({ initialURL: url });
+    const b = setup({ initialURL: url });
+    await a.strait.start();
+    await b.strait.start();
+    await settle();
+    const ids = [...a.calls, ...b.calls].filter((c) => c.path === '/v1/open').map((c) => c.body.openId);
+    expect(ids).toEqual([`web-${CLICK}`, `web-${CLICK}`]);
+  });
+
+  it('a page URL without strait_click is a page view: link callback for routing, nothing reported', async () => {
+    for (const url of [
+      'https://shop.example.com/p/42?color=red',
+      'https://shop.example.com/p/42?strait_click=not-a-tap-id',
+      'https://acme.strait.link/abc', // even on a link host: no /v1/resolve from a web page
+    ]) {
+      const t = setup({ initialURL: url });
+      await t.strait.start();
+      await t.strait.flushOpenReports();
+      await t.strait.trackEvent('purchase');
+      await settle();
+      expect(t.calls.map((c) => c.path)).toEqual(['/v1/event']);
+      expect(t.calls[0]!.body.clickId).toBeUndefined();
+      expect(t.events).toHaveLength(1);
+      expect(t.events[0]).toMatchObject({ matched: true, url: url.replace(/\?strait_click=.*$/, '') });
+      expect(await t.strait.pendingOpenReports()).toBe(0);
+    }
   });
 
   it('apps (isWeb false or not given) still run the first-launch check', async () => {
