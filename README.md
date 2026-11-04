@@ -210,7 +210,7 @@ await strait.trackEvent('purchase', { value: 49.99, currency: 'USD', eventId: or
 stores each one once, so a retry or a second report of the same order never counts twice. Left out,
 the SDK makes one. An event that can't be sent (offline, server busy) is kept with the saved open
 reports and sent later, for up to 7 days; `trackEvent` then resolves `false` (contract B13a).
-Refunds are not supported yet.
+Refunds are not supported yet. Revenue you must trust (billing, payouts) belongs on your server with the secret key: the app's publishable key is public, so anyone who can guess an order id could send it first.
 
 The event carries the tap id of the last attributed link open for 7 days, so
 the dashboard can place the revenue on that tap's channel and A/B variant

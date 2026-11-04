@@ -114,6 +114,13 @@ describe('trackEvent v2 (B13a)', () => {
     expect(queue(s)).toEqual([]);
   });
 
+  it('a number order id (plain JS: order.id) is sent as its string, so it still dedupes', async () => {
+    // Review 5 Nov: a number failed the engine's string rule (400) and the purchase was lost.
+    const { strait, e } = await make();
+    expect(await strait.trackEvent('purchase', { eventId: 1001 as unknown as string })).toBe(true);
+    expect(e.events().at(-1).eventId).toBe('1001');
+  });
+
   it('the tap id is chosen when the app calls, not at retry time', async () => {
     const { strait, e, s } = await make();
     const TAP = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';

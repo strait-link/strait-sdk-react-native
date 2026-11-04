@@ -712,7 +712,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
         const clickId = eventClickId(stored, at, extra.clickId) ?? undefined;
         // B13a: built once (tap id chosen now), with an eventId so a retry is stored once.
         const event: QueuedEvent = {
-          type: 'event', at, event: name, platform: r.platform(), eventId: extra.eventId || newEventId(at),
+          // String(): plain-JS apps pass number order ids; the engine only takes strings.
+          type: 'event', at, event: name, platform: r.platform(),
+          eventId: extra.eventId != null && extra.eventId !== '' ? String(extra.eventId) : newEventId(at),
           ...(extra.value !== undefined ? { value: extra.value } : {}),
           ...(extra.currency !== undefined ? { currency: extra.currency } : {}),
           ...(extra.linkId !== undefined ? { linkId: extra.linkId } : {}),
