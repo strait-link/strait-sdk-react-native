@@ -229,7 +229,8 @@ Renamed to Strait (breaking; clean break, no aliases).
 
 - Package is now `@strait/sdk-react-native`; repo `bazingga08/strait-sdk-react-native`,
   homepage https://usestrait.com.
-- API: `createStrait`, `Strait`, `StraitRuntime`, `CreateStraitConfig`, `StraitConfig`, `parseStraitLink`, `parseStraitClick`.
+- API (new names): `createStrait`, `Strait`, `StraitRuntime`, `CreateStraitConfig`,
+  `StraitConfig`, `parseStraitLink`, `parseStraitClick`.
 - Wire params: only `strait_click` (tap id) and `strait_link` (Play referrer) are read.
 - Storage keys: `strait.deferredChecked`, `strait.pendingOpens` (old values are ignored,
   so the deferred check runs once more after upgrading).
