@@ -340,6 +340,40 @@ export function newOpenId(now: number, random: () => number = Math.random): stri
   return `o_${now.toString(36)}_${r}`;
 }
 
+/**
+ * A unique id for one conversion event when the app gives none (contract B13a): the engine
+ * stores an eventId once, so a retried send is never counted twice. Same shape as newOpenId.
+ */
+export function newEventId(now: number, random: () => number = Math.random): string {
+  return `e${newOpenId(now, random).slice(1)}`;
+}
+
+/** What start() does with the once-per-install flag (contract B6a, shared-spec ADR 0003). */
+export interface FirstLaunchState {
+  /** Run the once-per-install deferred check / count this launch as the install's first. */
+  firstLaunch: boolean;
+  /** Set `strait.deferredChecked` to '' first: the storage came back from another install. */
+  clearFlag: boolean;
+  /** Then write this to `strait.installTime` (null = leave it). */
+  storeInstallTime: string | null;
+}
+
+/**
+ * B6a: storage restored from a backup of another install (Android Auto Backup, a restored
+ * phone) brings back `strait.deferredChecked`. The app's install time, stored next to it,
+ * tells: a different stored time = a new install, so the check runs again. No stored time
+ * (an app updated from an older SDK) = adopt it, never a new install. Unknown install time
+ * (null, 0, negative, not finite) = the B6 rule alone.
+ */
+export function firstLaunchState(flag: string | null | undefined, storedInstallTime: string | null | undefined, installTime: number | null | undefined): FirstLaunchState {
+  const t = typeof installTime === 'number' && Number.isFinite(installTime) && installTime >= 1 ? String(Math.trunc(installTime)) : null;
+  const stored = storedInstallTime || null;
+  if (flag !== '1') return { firstLaunch: true, clearFlag: false, storeInstallTime: t !== null && t !== stored ? t : null };
+  if (t === null || t === stored) return { firstLaunch: false, clearFlag: false, storeInstallTime: null };
+  if (stored === null) return { firstLaunch: false, clearFlag: false, storeInstallTime: t };
+  return { firstLaunch: true, clearFlag: true, storeInstallTime: t };
+}
+
 /** A link arriving this soon after the app came back to the front came "from background". */
 export const RESUME_WINDOW_MS = 2000;
 /** Pauses shorter than this are Android delivering the link, not the user leaving. */

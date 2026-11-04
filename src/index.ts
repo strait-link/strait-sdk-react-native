@@ -102,6 +102,7 @@ export {
   type CreateStraitConfig,
   type KeyValueStore,
   type LinkEvent,
+  type TrackEventExtra,
   type LinkStart,
 } from './strait.js';
 export {

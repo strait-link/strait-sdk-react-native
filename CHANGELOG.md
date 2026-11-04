@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.0 (unreleased, launch week)
+
+- Fix: reinstalls from a link are no longer lost. Android Auto Backup and restored iPhones put back
+  the "deferred check done" flag, so a reinstall skipped its deferred link and was never counted.
+  New optional `installTime` (e.g. Expo `Application.getInstallationTimeAsync()`): the SDK stores
+  the install time as `strait.installTime` and runs the check again when it changed; an app update,
+  or an app updated from an older SDK, is never a new install (contract B6a, shared-spec ADR 0003).
+- New: `trackEvent(name, { eventId })`, your order id; the engine stores each eventId once. Left out,
+  the SDK makes one, so a retry never counts twice. Events that can't be sent (offline, 429, 5xx) are
+  kept in the open-report queue and sent later; `pendingOpenReports()` counts them (contract B13a,
+  ADR 0004). New exported type `TrackEventExtra`.
+- Conformance vectors v10 (`firstLaunchState`).
+
 ## 0.10.2 (26 Oct 2026)
 
 - Fix (react-native-web / Expo web): web opens are counted only for landings from a Strait tap. Until

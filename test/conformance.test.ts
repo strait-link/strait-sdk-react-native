@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AppStateTracker, browserScreenWidth, portraitScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
-  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize,
+  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize, firstLaunchState,
   ATTRIBUTION_WINDOW_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
 
@@ -13,6 +13,10 @@ describe('conformance vectors', () => {
   it('constants', () => {
     expect({ RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, ATTRIBUTION_WINDOW_MS }).toEqual(v.constants);
   });
+  it.each(v.firstLaunchState)('firstLaunchState: $name', ({ flag, stored, installTime, expected }) => {
+    expect(firstLaunchState(flag, stored, installTime)).toEqual(expected);
+  });
+
   it.each(v.eventClickId)('eventClickId: $name', ({ stored, now, explicit, expected }) => {
     expect(eventClickId(stored, now, explicit)).toBe(expected);
   });
@@ -46,8 +50,8 @@ describe('conformance vectors', () => {
   it.each(v.parseHandoffUrl)('parseHandoffUrl: $name', ({ text, linkHosts, expected }) => {
     expect(parseHandoffUrl(text, linkHosts)).toBe(expected);
   });
-  it('vectors v9', () => {
-    expect(v.version).toBe(9);
+  it('vectors v10', () => {
+    expect(v.version).toBe(10);
   });
   it.each(v.takeClickId)('takeClickId($input)', ({ input, expected }) => {
     expect(takeClickId(input)).toEqual(expected);
