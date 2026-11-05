@@ -105,6 +105,57 @@ describe('setEnabled (opt-out)', () => {
     }
   });
 
+  // F4: the switch goes off while /v1/resolve is out.
+  const inFlight = (resolve: (off: () => Promise<void>) => Promise<{ status: number; json: object }>) => {
+    const calls: string[] = [];
+    let off = async () => undefined as void;
+    const fetch = (async (url: string) => {
+      const path = new URL(url).pathname;
+      calls.push(path);
+      const r = path === '/v1/resolve' ? await resolve(off) : { status: 200, json: { matched: true, longUrl: 'https://shop.example/p/42', linkId: 'lnk_42' } };
+      return { ok: r.status < 300, status: r.status, json: async () => r.json, headers: { get: () => null } } as unknown as Response;
+    }) as unknown as typeof globalThis.fetch;
+    const s = store();
+    const rt = runtime();
+    const strait = createStrait({ publishableKey: 'st_pub_test_x', endpoint: 'https://acme.strait.link', runtime: rt.runtime, fetch, storage: s });
+    off = () => strait.setEnabled(false);
+    return { strait, rt, s, calls };
+  };
+
+  it('switched off while /v1/resolve is out and it fails: routes via /v1/lookup, not network, nothing queued', async () => {
+    const { strait, rt, s, calls } = inFlight(async (off) => { await off(); throw new Error('offline'); });
+    const links: Array<{ matched: boolean; path?: string; reason?: string }> = [];
+    strait.onLink((l) => links.push(l));
+    await strait.start();
+    await settle();
+    calls.length = 0;
+    rt.open('https://acme.strait.link/sale');
+    await settle();
+    expect(calls).toEqual(['/v1/resolve', '/v1/lookup']);
+    expect(links.at(-1)).toMatchObject({ matched: true, path: '/p/42' });
+    expect(links.at(-1)?.reason).toBeUndefined();
+    expect(await strait.pendingOpenReports()).toBe(0);
+    expect(s.data.get('strait.lastTap') ?? '').toBe('');
+  });
+
+  it('switched off while /v1/resolve is out and it answers: the link routes, no tap kept, nothing queued', async () => {
+    const { strait, rt, s, calls } = inFlight(async (off) => {
+      await off();
+      return { status: 200, json: { matched: true, longUrl: 'https://shop.example/p/42', linkId: 'lnk_42', clickId: '3f2a9c1e-7b4d-4e8a-9f10-2c3d4e5f6a7b' } };
+    });
+    const links: Array<{ matched: boolean }> = [];
+    strait.onLink((l) => links.push(l));
+    await strait.start();
+    await settle();
+    calls.length = 0;
+    rt.open('https://acme.strait.link/sale');
+    await settle();
+    expect(links.at(-1)).toMatchObject({ matched: true });
+    expect(calls).toEqual(['/v1/resolve']);
+    expect(await strait.pendingOpenReports()).toBe(0);
+    expect(s.data.get('strait.lastTap') ?? '').toBe('');
+  });
+
   it('persists across launches', async () => {
     const s = store();
     await make(engine(), s).strait.setEnabled(false);
