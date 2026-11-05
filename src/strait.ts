@@ -685,10 +685,12 @@ export function createStrait(config: CreateStraitConfig): Strait {
   }
 
   const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
-  /** The once-per-install check; marked done only once the engine answered (offline → next launch). */
+  /** The once-per-install check; marked done only once the engine answered (offline → next launch;
+   *  switched off meanwhile → when back on). */
   const firstCheck = async () => {
     const e = await runDeferred(true);
-    if (e.reason !== 'network') await markChecked();
+    if (e.reason === 'disabled') deferredDue = true;
+    else if (e.reason !== 'network') await markChecked();
   };
 
   return {
