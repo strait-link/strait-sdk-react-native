@@ -19,6 +19,7 @@ import {
   parseStraitClick,
   parseStraitLink,
   pruneOpenQueue,
+  versionFields,
   rememberTap,
   replyClickId,
   replyReferralCode,
@@ -197,6 +198,13 @@ export interface CreateStraitConfig {
    */
   installTime?: () => Promise<number | null>;
   /**
+   * Your app's version, e.g. Expo `Application.nativeApplicationVersion` or react-native-device-info
+   * `getVersion()` (React Native itself doesn't expose it). Sent as `appVersion` with every call that records
+   * an open or install, so support can see which build a person had. Trimmed, at most 64 printable ASCII
+   * characters, else not sent. Left out = only the SDK's own version is sent.
+   */
+  appVersion?: string;
+  /**
    * @deprecated Ignored. The workspace chooses the iPhone deferred-link method
    * in Dashboard → Settings → iPhone installs, and the SDK reads that choice
    * from the engine's /v1/match reply on the first launch (no app release
@@ -310,6 +318,9 @@ interface OpenReport {
   reason?: string;
   firstLaunch: boolean;
   at: number;
+  /** td2-23: kept with a saved report, so a retry after an app update still says which build opened. */
+  appVersion?: string;
+  sdkVersion?: string;
 }
 
 const DEFERRED_FLAG = 'strait.deferredChecked';
@@ -322,6 +333,7 @@ const HTTP_TIMEOUT_MS = 10_000;
 export function createStrait(config: CreateStraitConfig): Strait {
   const doFetch = config.fetch ?? globalThis.fetch;
   const base = config.endpoint.replace(/\/+$/, '');
+  const versions = versionFields(config.appVersion);
   const linkHosts = normalizeLinkHosts(base, config.linkHosts);
   const storage = config.storage ?? memoryStore();
   const events: LinkEvent[] = [];
@@ -536,11 +548,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
       // The lookup is also the open report (openId); the engine says whether
       // it recorded it, and anything short of that is retried via /v1/open.
       // B18: only host + path (+ utm_source) leave the device or reach storage.
-      const base: OpenReport = { openId: id, kind: 'direct', route: 'app_link', appState, platform, url: reportUrl(raw), matched: false, firstLaunch, at: t0 };
+      const base: OpenReport = { openId: id, kind: 'direct', route: 'app_link', appState, platform, url: reportUrl(raw), matched: false, firstLaunch, at: t0, ...versions };
       try {
         const { json } = await call('POST', '/v1/resolve', {
           publishableKey: config.publishableKey, url: base.url, platform, openId: id, appState, firstLaunch, at: t0,
-          ...deviceClassOf(r),
+          ...deviceClassOf(r), ...versions,
         });
         const matched = json.matched === true;
         const reason = matched ? undefined : json.reason ?? json.error;
@@ -562,7 +574,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     // Navigation never waits for the report.
     if (on && (!web || webTap)) void report({
       openId: id, kind: 'direct', route: c.route, appState, platform, url: reportUrl(c.url),
-      clickId: c.clickId ?? undefined, matched: true, firstLaunch, at: t0,
+      clickId: c.clickId ?? undefined, matched: true, firstLaunch, at: t0, ...versions,
     });
     return emit(id, {
       kind: 'direct', route: c.route, appState, rawUrl: raw, matched: true,
@@ -609,7 +621,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         if (linkId) {
           const clickId = parseStraitClick(referrer) ?? undefined;
           const { json } = await answered('/v1/referrer', {
-            publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag,
+            publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag, ...versions,
           });
           if (json.matched) {
             if (record) noteTap(replyClickId(json.clickId, clickId), t0);
@@ -621,7 +633,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         }
       }
       const { json } = await answered('/v1/match', {
-        publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag,
+        publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag, ...versions,
       });
       if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0);
       pasteHandoff = pasteHandoffOn(json);
@@ -651,7 +663,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     if (!token) return done(result);
     try {
       const { json } = await answered('/v1/handoff/claim', {
-        publishableKey: config.publishableKey, token, platform: 'ios', ...tag,
+        publishableKey: config.publishableKey, token, platform: 'ios', ...tag, ...versions,
       });
       if (json.matched !== true) return done(result); // not claimable: keep the match result
       noteTap(replyClickId(json.clickId), t0);
@@ -689,7 +701,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
     try {
       const res = await call('POST', '/v1/handoff/claim', {
-        publishableKey: config.publishableKey, token, platform: r.platform(), openId: id, at: t0, firstLaunch: isFirstLaunch,
+        publishableKey: config.publishableKey, token, platform: r.platform(), openId: id, at: t0, firstLaunch: isFirstLaunch, ...versions,
       });
       if (shouldRetryReport(res.status)) throw new Error(`HTTP ${res.status}`);
       const json = res.json;

@@ -449,3 +449,22 @@ export class AppStateTracker {
     return away !== null && away >= TRANSIENT_PAUSE_MS ? 'background' : 'foreground';
   }
 }
+
+/** This SDK's version, sent as `sdkVersion` (td2-23). Equals package.json (test/app-version.test.ts). */
+export const SDK_VERSION = '0.11.0';
+
+/** A version string as the engine keeps it: trimmed, at most 64 printable ASCII characters; else undefined (not sent). */
+export function cleanVersion(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const s = v.trim().slice(0, 64).trim();
+  return /^[\x20-\x7e]+$/.test(s) ? s : undefined;
+}
+
+/**
+ * The fields every call that records an open or install carries (td2-23, engine ADR 0086): the app's version
+ * when the app passed one, and this SDK's. Never on /v1/lookup or /v1/event.
+ */
+export function versionFields(appVersion: unknown): { appVersion?: string; sdkVersion: string } {
+  const app = cleanVersion(appVersion);
+  return app ? { appVersion: app, sdkVersion: SDK_VERSION } : { sdkVersion: SDK_VERSION };
+}

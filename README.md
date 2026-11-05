@@ -134,6 +134,8 @@ const strait = createStrait({
   // Reinstalls from a link (see "Reinstalls and backups"). Expo: expo-application;
   // bare React Native: react-native-device-info's getFirstInstallTime().
   installTime: async () => (await Application.getInstallationTimeAsync()).getTime(),
+  // Which build opened a link, for support. Bare React Native: react-native-device-info's getVersion().
+  appVersion: Application.nativeApplicationVersion ?? undefined,
 });
 strait.onLinkStart(() => showLoading());
 strait.onLink((e) => e.matched && e.path && navigate(e.path, e.params));
@@ -195,6 +197,9 @@ install is marked as such, so dashboards can tell **new users** (installed and
 opened) from **existing users** (already had the app). The deferred check is
 only marked done once the server answered, so an offline first launch is
 retried on the next launch.
+
+Each of these reports also carries your app's version (`appVersion`, when you pass it) and this SDK's
+(`sdkVersion`), so support can see which build opened a link; `/v1/lookup` and `/v1/event` carry neither.
 
 Open reports and the store sheet also say whether the app runs on a phone or a
 tablet (`deviceClass`, contract B14): on iOS from `Platform.isPad`, on Android
