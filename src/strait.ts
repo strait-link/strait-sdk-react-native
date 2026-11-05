@@ -654,11 +654,12 @@ export function createStrait(config: CreateStraitConfig): Strait {
     // once-per-install iPhone check. Same openId, one event.
     const clip = config.clipboard;
     // Once a link is here the result won't be delivered: don't read the
-    // clipboard (that shows iOS's paste prompt for nothing).
-    if (result.matched || quiet() || !(record && pasteHandoff && clip && r.platform() === 'ios')) {
+    // clipboard (that shows iOS's paste prompt for nothing). Nor once the app
+    // switched Strait off during the check (F7): no paste prompt for an opted-out person.
+    if (result.matched || quiet() || !(record && pasteHandoff && clip && r.platform() === 'ios') || !(await isEnabled())) {
       return done(result);
     }
-    const token = await handoffToken(clip, quiet);
+    const token = await handoffToken(clip, () => quiet() || enabled === false);
     if (!token) return done(result);
     try {
       const { json } = await answered('/v1/handoff/claim', {
