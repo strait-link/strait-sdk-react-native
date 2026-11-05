@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Security (example app only, no SDK change): `examples/expo` no longer locks build-tool packages with known
+  advisories: node-forge 1.4.0 -> 1.4.3 (12 advisories), glob 13 -> 14.0.3 and minimatch 10 -> 11.0.4 (the
+  versions Expo 57.0.32 moved to), uuid 7 -> 11.1.1 for `xcode` only (it uses only `uuid.v4()`). The published
+  package's dependencies are unchanged. zod 3.25.76 and deepmerge 4.3.1 stay until the example moves to Expo
+  57.0.32 (which drops both; released 5 Nov, taken after a 7-day wait for fresh releases).
 - Fix (privacy): the legacy `resolveDeferredLink` ignored the opt-out switch and still called `/v1/match`
   (one install row per call). It now takes `storage` (pass the one you give `createStrait`); while
   `setEnabled(false)` is set there it sends nothing and returns no match. **Action required** if you call
