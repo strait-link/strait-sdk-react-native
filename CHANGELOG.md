@@ -6,8 +6,10 @@
   no open reports or events and does no deferred or clipboard matching; reports saved on the device and
   the remembered tap are deleted. Kept across launches (`strait.enabled` in `storage`); `setEnabled(true)`
   resumes and runs a first-launch check that was skipped while off. `isEnabled()` reads it. Default on.
-  Links that carry their own destination still reach `onLink`; short links come back `reason: 'disabled'`
-  (resolving one counts the tap). ADR 0002.
+  Links that carry their own destination still reach `onLink`. A Strait short link still routes: while
+  off the SDK asks the engine's `/v1/lookup` (key + host + path, no query), which records no tap, open or tap
+  id, and queues no report; if that lookup fails (offline, or an engine without it) the link comes back
+  `reason: 'disabled'`. ADR 0002; engine ADR 0083.
 - New: a matched deferred `LinkEvent` has `match: { method, confidence }`, how the engine matched
   (`install_referrer`, `clipboard`, `fingerprint`, `test`) and how sure it is (`exact`, `high`, `probable`);
   absent when not matched or the engine doesn't send it (engine ADR 0081). New exported type `MatchInfo`.
