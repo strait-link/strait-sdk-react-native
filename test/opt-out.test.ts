@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStrait, type StraitRuntime, type KeyValueStore } from '../src/index.js';
+import { createStrait, resolveDeferredLink, type StraitRuntime, type KeyValueStore } from '../src/index.js';
 
 // Opt-out (td2-27): setEnabled(false) = no reports, no events, no install matching, kept across
 // launches; a link that carries its own destination still reaches onLink (the app's own navigation).
@@ -154,6 +154,33 @@ describe('setEnabled (opt-out)', () => {
     expect(calls).toEqual(['/v1/resolve']);
     expect(await strait.pendingOpenReports()).toBe(0);
     expect(s.data.get('strait.lastTap') ?? '').toBe('');
+  });
+
+  // F5: the legacy one-call API honours the same switch, read from the storage the app passes.
+  describe('legacy resolveDeferredLink', () => {
+    const adapter = (platform: 'android' | 'ios') => ({
+      platform: () => platform,
+      collectDevice: () => ({ screenWidth: 411, pixelRatio: 2.625, language: 'en', timezone: 'Asia/Kolkata' }),
+      getInstallReferrer: async () => 'strait_link=lnk_42',
+    });
+    for (const platform of ['android', 'ios'] as const) {
+      it(`${platform}: switched off through createStrait (same storage): no /v1/referrer, no /v1/match, no match`, async () => {
+        const s = store();
+        await make(engine(), s).strait.setEnabled(false);
+        const e = engine(() => ({ status: 200, json: { matched: true, linkId: 'lnk_42', matchMethod: 'install_referrer' } }));
+        const r = await resolveDeferredLink({ publishableKey: 'st_pub_test_x', endpoint: 'https://acme.strait.link', adapter: adapter(platform), fetch: e.fetch, storage: s });
+        expect(r).toMatchObject({ matched: false, matchMethod: 'none' });
+        expect(e.calls).toEqual([]);
+      });
+    }
+
+    it('on (or no storage given): asks the engine as before', async () => {
+      for (const storage of [store(), undefined]) {
+        const e = engine(() => ({ status: 200, json: { matched: false, matchMethod: 'none' } }));
+        await resolveDeferredLink({ publishableKey: 'st_pub_test_x', endpoint: 'https://acme.strait.link', adapter: adapter('ios'), fetch: e.fetch, storage });
+        expect(e.calls).toEqual(['/v1/match']);
+      }
+    });
   });
 
   it('persists across launches', async () => {

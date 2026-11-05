@@ -56,3 +56,11 @@ an opted-out tap does. A resolve reply that lands after the switch went off stil
 while on; the engine already has it), but its tap id is no longer remembered: `noteTap` checks the switch
 inside the write chain, as Android does. react-native-web never resolves short links (no link hosts on the
 web), so the Flutter web finding F2 does not apply here.
+
+## Update 5 Nov 2026: follow-up F5, the legacy `resolveDeferredLink`
+The older one-call API had no storage and so never saw the switch: an opted-out app that still called it
+posted `/v1/match`, which records an install. It now takes `storage` (the one passed to `createStrait`) and
+returns no match with no call while `strait.enabled` is `'0'` there. Unreadable storage counts as on, as in
+`createStrait`. Without `storage` it can't read the switch (the createStrait default is in memory); the README
+says to pass it. Options weighed: a module-level switch shared with every `createStrait` (a hidden global
+that would also leak between instances and tests), or removing the legacy API (a breaking change).
