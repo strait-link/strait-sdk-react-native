@@ -47,7 +47,13 @@ const NONE: MatchResult = { matched: false, matchMethod: 'none' };
  */
 export async function resolveDeferredLink(config: StraitConfig): Promise<MatchResult> {
   // Opted out (ADR 0002): no referrer or match call, so no install is recorded. Unreadable = on, as in createStrait.
-  if ((await config.storage?.getItem('strait.enabled').catch(() => null)) === '0') return NONE;
+  let enabled: string | null | undefined = null;
+  try {
+    enabled = await config.storage?.getItem('strait.enabled');
+  } catch {
+    // unreadable = on
+  }
+  if (enabled === '0') return NONE;
   const doFetch = config.fetch ?? globalThis.fetch;
   let adapter: NativeAdapter;
   try {

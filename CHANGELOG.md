@@ -4,7 +4,8 @@
 
 - Fix (privacy): the legacy `resolveDeferredLink` ignored the opt-out switch and still called `/v1/match`
   (one install row per call). It now takes `storage` (pass the one you give `createStrait`); while
-  `setEnabled(false)` is set there it sends nothing and returns no match.
+  `setEnabled(false)` is set there it sends nothing and returns no match. **Action required** if you call
+  it and use the opt-out: pass `storage`, or it can't see the switch and still runs.
 - Fix: switching the SDK off while a short link's `/v1/resolve` is still out no longer answers
   `reason: 'network'`; the link routes through `/v1/lookup` as an opted-out tap does, and nothing is queued.
   A reply that lands after the switch went off keeps no tap.

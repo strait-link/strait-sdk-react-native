@@ -174,6 +174,18 @@ describe('setEnabled (opt-out)', () => {
       });
     }
 
+    it('unreadable storage (throws, or answers without a promise) counts as on and never throws', async () => {
+      const bad = [
+        { getItem: () => { throw new Error('locked'); }, setItem: async () => undefined },
+        { getItem: () => '1' as unknown as Promise<string>, setItem: async () => undefined },
+      ];
+      for (const storage of bad) {
+        const e = engine(() => ({ status: 200, json: { matched: false, matchMethod: 'none' } }));
+        await expect(resolveDeferredLink({ publishableKey: 'st_pub_test_x', endpoint: 'https://acme.strait.link', adapter: adapter('ios'), fetch: e.fetch, storage })).resolves.toMatchObject({ matched: false });
+        expect(e.calls).toEqual(['/v1/match']);
+      }
+    });
+
     it('on (or no storage given): asks the engine as before', async () => {
       for (const storage of [store(), undefined]) {
         const e = engine(() => ({ status: 200, json: { matched: false, matchMethod: 'none' } }));
