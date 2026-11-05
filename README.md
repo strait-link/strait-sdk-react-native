@@ -236,6 +236,11 @@ It is absent when there is no code, no match, or the engine doesn't send one.
 Referrals are a preview and are not switched on yet; grant rewards from your server
 (the `referral.converted` webhook), not in the app.
 
+## User consent / opt-out
+
+If your app asks for consent first (for example under India's DPDP Act or a GDPR consent flow in the EU), call `await strait.setEnabled(false)` until the person agrees: Strait then sends no open reports or events, does no install matching, and deletes reports waiting on the device. The choice is kept across launches; `setEnabled(true)` turns it back on (default: on) and `isEnabled()` reads it.
+Links that carry their own destination still open your screens; a short link needs a lookup that counts the tap, so it comes back `matched: false, reason: 'disabled'`. Whether you need consent, and for what, is a question for your own legal advice.
+
 ## Check your setup (doctor)
 
 Most "the link opens the browser, not the app" reports are setup: the app isn't listed for your link

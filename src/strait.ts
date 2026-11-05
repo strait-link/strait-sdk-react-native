@@ -260,6 +260,16 @@ export interface Strait {
    * each finding with `[Strait doctor]` in __DEV__ only, returns the report.
    */
   doctor(options?: { androidPackage?: string; iosBundleId?: string; certSha256?: string[] }): Promise<DoctorReport>;
+  /**
+   * Opt-out switch for consent flows (default on, kept in `storage` across launches). Off: no open
+   * reports, no events, no deferred or clipboard matching, nothing remembered; reports saved earlier
+   * and the remembered tap are deleted. A link that carries its own destination still reaches
+   * onLink; a short link needs a lookup that counts the tap, so it comes back `reason: 'disabled'`.
+   * Back on: sending resumes, and a first-launch check skipped while off runs now.
+   */
+  setEnabled(enabled: boolean): Promise<void>;
+  /** The opt-out switch's current value (see setEnabled). */
+  isEnabled(): Promise<boolean>;
   stop(): void;
 }
 
@@ -305,6 +315,7 @@ const DEFERRED_FLAG = 'strait.deferredChecked';
 const QUEUE_KEY = 'strait.pendingOpens';
 const TAP_KEY = 'strait.lastTap';
 const INSTALL_TIME_KEY = 'strait.installTime';
+const ENABLED_KEY = 'strait.enabled';
 /** Per request, like the Android SDK's 10 s connect/read timeouts. */
 const HTTP_TIMEOUT_MS = 10_000;
 export function createStrait(config: CreateStraitConfig): Strait {
@@ -321,6 +332,17 @@ export function createStrait(config: CreateStraitConfig): Strait {
   let isFirstLaunch = false;
   /** A direct link arrived in this launch (B6: the first-launch check then stays quiet). */
   let directArrived = false;
+  /** Opt-out switch, read from storage once; unreadable storage = the default (on), like every other read here. */
+  let enabled: boolean | undefined;
+  const isEnabled = async (): Promise<boolean> => {
+    if (enabled === undefined) {
+      const v = await storage.getItem(ENABLED_KEY).catch(() => null);
+      enabled ??= v !== '0'; // a setEnabled() during the read wins
+    }
+    return enabled;
+  };
+  /** The first-launch check was skipped because the SDK was off: setEnabled(true) runs it. */
+  let deferredDue = false;
 
   const rt = async (): Promise<StraitRuntime> =>
     (runtime ??= (await import('./native.js')).nativeRuntime({ installReferrer: config.installReferrer }));
@@ -359,8 +381,10 @@ export function createStrait(config: CreateStraitConfig): Strait {
       clearTimeout(timer);
     }
   };
+  // Every engine call goes through here: while opted out nothing leaves the device.
   const call = (method: 'GET' | 'POST', path: string, body?: unknown) =>
     timed(async (signal) => {
+      if (!(await isEnabled())) throw new Error('disabled');
       const res = await doFetch(`${base}${path}`, {
         method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -413,6 +437,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const writeQueue = (q: Queued[]) => storage.setItem(QUEUE_KEY, JSON.stringify(q)).catch(() => undefined);
   const enqueue = (report: Queued) =>
     serial(async () => {
+      if (!(await isEnabled())) return;
       const r = await rt();
       await writeQueue(pruneOpenQueue([...(await readQueue()), report], r.now()));
     });
@@ -448,7 +473,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const flush = (): Promise<void> =>
     (flushing ??= serial(async () => {
       const r = await rt();
-      if (r.now() < holdUntil) return; // C1: the server asked us to wait
+      if (r.now() < holdUntil || !(await isEnabled())) return; // C1: the server asked us to wait
       const queue = pruneOpenQueue(await readQueue(), r.now());
       const keep: Queued[] = [];
       let stop = false;
@@ -480,9 +505,14 @@ export function createStrait(config: CreateStraitConfig): Strait {
     const webTap = web && c && !c.needsResolve ? c.clickId : null;
     const id = webTap ? `web-${webTap}` : newId(t0);
     const platform = web ? 'web' : r.platform();
+    const on = await isEnabled();
     announce({ id, kind: 'direct', appState, rawUrl: raw, at: t0 });
     if (!c) {
       return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'invalid_url', ms: r.now() - t0, at: t0 });
+    }
+    if (c.needsResolve && !on) {
+      // Opted out: the lookup would count the tap, so a short link can't be resolved.
+      return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'disabled', ms: r.now() - t0, at: t0 });
     }
     if (c.needsResolve) {
       // The lookup is also the open report (openId); the engine says whether
@@ -508,9 +538,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
         return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
       }
     }
-    if (c.clickId) noteTap(c.clickId, t0);
+    if (c.clickId && on) noteTap(c.clickId, t0);
     // Navigation never waits for the report.
-    if (!web || webTap) void report({
+    if (on && (!web || webTap)) void report({
       openId: id, kind: 'direct', route: c.route, appState, platform, url: reportUrl(c.url),
       clickId: c.clickId ?? undefined, matched: true, firstLaunch, at: t0,
     });
@@ -529,6 +559,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
     const r = await rt();
     const t0 = r.now();
     const id = newId(t0);
+    if (!(await isEnabled())) {
+      return { id, kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: false, reason: 'disabled', ms: 0, at: t0 };
+    }
     const tag = record ? { openId: id, at: t0 } : { record: false };
     // B6: a link that arrived before or while this once-per-install check ran is
     // what the person wants now. The check's answer (a match, no_match or
@@ -629,6 +662,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
     if (!token) {
       return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'not_handoff', ms: 0, at: t0 });
     }
+    if (!(await isEnabled())) {
+      return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'disabled', ms: 0, at: t0 });
+    }
     announce({ id, kind: 'deferred', appState: 'closed', at: t0 });
     try {
       const res = await call('POST', '/v1/handoff/claim', {
@@ -647,6 +683,15 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
     }
   }
+
+  const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
+  /** The once-per-install check; marked done only once the engine answered (offline → next launch;
+   *  switched off meanwhile → when back on). */
+  const firstCheck = async () => {
+    const e = await runDeferred(true);
+    if (e.reason === 'disabled') deferredDue = true;
+    else if (e.reason !== 'network') await markChecked();
+  };
 
   return {
     async openStoreSheet(url: string, options: StoreSheetOptions = {}): Promise<StoreSheetResult> {
@@ -691,16 +736,14 @@ export function createStrait(config: CreateStraitConfig): Strait {
         firstLaunch = s.firstLaunch;
       }
       isFirstLaunch = firstLaunch;
-      const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
       if (initial) {
         // Opened by a link on first launch = the user's intent right now: no
         // deferred check, but this open still counts as the install's first.
         if (firstLaunch) await markChecked();
         await handleUrl(initial, 'closed', firstLaunch);
       } else if (firstLaunch) {
-        // Marked done only once the engine answered: offline → next launch.
-        const e = await runDeferred(true);
-        if (e.reason !== 'network') await markChecked();
+        if (await isEnabled()) await firstCheck();
+        else deferredDue = true; // opted out: not marked done, runs when switched back on
       }
       void flush();
     },
@@ -726,6 +769,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     },
     async trackEvent(name, extra = {}) {
       const r = await rt();
+      if (!(await isEnabled())) return false;
       try {
         await tapWrite;
         const stored = await storage.getItem(TAP_KEY).catch(() => null);
@@ -782,6 +826,23 @@ export function createStrait(config: CreateStraitConfig): Strait {
       }
       return report;
     },
+    async setEnabled(on) {
+      enabled = on;
+      await storage.setItem(ENABLED_KEY, on ? '1' : '0').catch(() => undefined);
+      if (!on) {
+        // Opting out also deletes what was saved to send later.
+        await serial(() => writeQueue([]));
+        setTap('');
+        await tapWrite;
+        return;
+      }
+      if (deferredDue) {
+        deferredDue = false;
+        await firstCheck();
+      }
+      void flush();
+    },
+    isEnabled,
     stop() {
       for (const u of unsubs.splice(0)) u();
     },
