@@ -97,6 +97,15 @@ describe('match (method + confidence) on deferred LinkEvents', () => {
     const { events } = await run('ios', { '/v1/match': { ...MATCHED, matchMethod: 'exact_ext', match } });
     expect(events[0]).toMatchObject({ route: 'fingerprint', matched: true, match });
   });
+  it('clipboard boost claim', async () => {
+    const match = { method: 'clipboard', confidence: 'exact' };
+    const clipboard: ClipboardAccess = { hasProbableWebUrl: async () => true, readText: async () => HANDOFF };
+    const { events } = await run('ios', {
+      '/v1/match': { matched: false, ios: { deviceMatching: true, pasteHandoff: true } },
+      '/v1/handoff/claim': { ...MATCHED, matchMethod: 'clipboard', match },
+    }, { clipboard });
+    expect(events[0]).toMatchObject({ route: 'clipboard', matched: true, match });
+  });
   it('Paste button (claimHandoff)', async () => {
     const match = { method: 'clipboard', confidence: 'exact' };
     const { strait } = await run('ios', { '/v1/match': { matched: false }, '/v1/handoff/claim': { ...MATCHED, matchMethod: 'clipboard', match } });

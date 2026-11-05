@@ -310,8 +310,9 @@ export function replyReferralCode(reply: unknown): string | null {
  * reserved for the scored iPhone matcher); test = test mode.
  */
 export interface MatchInfo {
-  method: 'install_referrer' | 'clipboard' | 'fingerprint' | 'test';
-  confidence: 'exact' | 'high' | 'probable';
+  /** New values may be added by the engine later. */
+  method: 'install_referrer' | 'clipboard' | 'fingerprint' | 'test' | (string & {});
+  confidence: 'exact' | 'high' | 'probable' | (string & {});
 }
 
 /** The reply's `match`, as sent, when it has a string method and confidence; else null. */

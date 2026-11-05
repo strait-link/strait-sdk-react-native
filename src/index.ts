@@ -3,7 +3,6 @@ import { parseStraitLink } from './core.js';
 
 export type { DeviceFields, NativeAdapter } from './adapter.js';
 export { computeSignature, h32 } from './signature.js';
-import type { MatchInfo } from './core.js';
 export type { MatchInfo } from './core.js';
 
 export interface StraitConfig {
@@ -28,8 +27,6 @@ export interface MatchResult {
   matchMethod: 'install_referrer' | 'exact_ext' | 'exact_core' | 'none';
   /** When matched and the tap carried a referral code (preview, contract B21). */
   referralCode?: string;
-  /** When matched: how the engine matched and how sure it is (engine ADR 0081). */
-  match?: MatchInfo;
 }
 
 const NONE: MatchResult = { matched: false, matchMethod: 'none' };
