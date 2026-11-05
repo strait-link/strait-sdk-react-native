@@ -1,5 +1,6 @@
 import type { NativeAdapter } from './adapter.js';
 import { parseStraitLink } from './core.js';
+import type { KeyValueStore } from './strait.js';
 
 export type { DeviceFields, NativeAdapter } from './adapter.js';
 export { computeSignature, h32 } from './signature.js';
@@ -17,6 +18,12 @@ export interface StraitConfig {
   adapter?: NativeAdapter;
   /** Override fetch (tests). */
   fetch?: typeof fetch;
+  /**
+   * The storage you pass to `createStrait` (e.g. AsyncStorage), so its opt-out switch
+   * (`setEnabled(false)`, kept as `strait.enabled`) is honoured here too: while off this
+   * sends nothing and returns no match. Left out, the switch can't be read and the check runs.
+   */
+  storage?: KeyValueStore;
 }
 
 export interface MatchResult {
@@ -39,6 +46,14 @@ const NONE: MatchResult = { matched: false, matchMethod: 'none' };
  * Never throws — returns a no-match result on any error.
  */
 export async function resolveDeferredLink(config: StraitConfig): Promise<MatchResult> {
+  // Opted out (ADR 0002): no referrer or match call, so no install is recorded. Unreadable = on, as in createStrait.
+  let enabled: string | null | undefined = null;
+  try {
+    enabled = await config.storage?.getItem('strait.enabled');
+  } catch {
+    // unreadable = on
+  }
+  if (enabled === '0') return NONE;
   const doFetch = config.fetch ?? globalThis.fetch;
   let adapter: NativeAdapter;
   try {
