@@ -304,6 +304,24 @@ export function replyReferralCode(reply: unknown): string | null {
   return typeof reply === 'string' && REFERRAL_CODE.test(reply) ? reply : null;
 }
 
+/**
+ * How the engine matched a deferred link and how sure it is (engine ADR 0081):
+ * install_referrer and clipboard are exact; fingerprint is probable (high is
+ * reserved for the scored iPhone matcher); test = test mode.
+ */
+export interface MatchInfo {
+  method: 'install_referrer' | 'clipboard' | 'fingerprint' | 'test';
+  confidence: 'exact' | 'high' | 'probable';
+}
+
+/** The reply's `match`, as sent, when it has a string method and confidence; else null. */
+export function replyMatch(reply: unknown): MatchInfo | null {
+  const m = reply as { method?: unknown; confidence?: unknown } | null | undefined;
+  return m && typeof m.method === 'string' && typeof m.confidence === 'string'
+    ? ({ method: m.method, confidence: m.confidence } as MatchInfo)
+    : null;
+}
+
 /** A clipboard-boost handoff token as the tap page mints it: 128 random bits, base64url (contract B19). */
 const HANDOFF_TOKEN = /^[A-Za-z0-9_-]{22}$/;
 

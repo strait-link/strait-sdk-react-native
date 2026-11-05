@@ -22,6 +22,8 @@ import {
   rememberTap,
   replyClickId,
   replyReferralCode,
+  replyMatch,
+  type MatchInfo,
   shouldRetryReport,
   retryDelayMs,
   splitUrl,
@@ -45,6 +47,10 @@ const deviceClassOf = (r: StraitRuntime): { deviceClass?: DeviceClass } => {
 const referral = (matched: boolean, code: unknown): { referralCode?: string } => {
   const c = matched ? replyReferralCode(code) : null;
   return c ? { referralCode: c } : {};
+};
+const matchOf = (matched: boolean, m: unknown): { match?: MatchInfo } => {
+  const v = matched ? replyMatch(m) : null;
+  return v ? { match: v } : {};
 };
 
 /**
@@ -147,6 +153,12 @@ export interface LinkEvent {
    * `referral.converted` webhook). Referrals are a preview (contract B21).
    */
   referralCode?: string;
+  /**
+   * Deferred links only: how the engine matched and how sure it is, e.g.
+   * `{ method: 'fingerprint', confidence: 'probable' }`. Absent when not matched
+   * or the engine doesn't send it (engine ADR 0081).
+   */
+  match?: MatchInfo;
   /** Time spent resolving, ms. */
   ms: number;
   at: number;
@@ -550,7 +562,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
             if (record) noteTap(replyClickId(json.clickId, clickId), t0);
             return {
               kind: 'deferred', route: 'install_referrer', appState: 'closed', matched: true,
-              ...destination(json.longUrl), linkId: json.linkId ?? linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
+              ...destination(json.longUrl), linkId: json.linkId ?? linkId, ...referral(true, json.referralCode), ...matchOf(true, json.match), ms: r.now() - t0, at: t0,
             };
           }
         }
@@ -563,7 +575,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),
-        linkId: json.linkId, ...referral(json.matched === true, json.referralCode), ms: r.now() - t0, at: t0,
+        linkId: json.linkId, ...referral(json.matched === true, json.referralCode), ...matchOf(json.matched === true, json.match), ms: r.now() - t0, at: t0,
       };
     };
     let result: Omit<LinkEvent, 'id'>;
@@ -591,7 +603,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       noteTap(replyClickId(json.clickId), t0);
       return done({
         kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
-        ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ms: r.now() - t0, at: t0,
+        ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ...matchOf(true, json.match), ms: r.now() - t0, at: t0,
       });
     } catch {
       return done({ kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
@@ -629,7 +641,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return emit(id, {
         kind: 'deferred', route: 'clipboard', appState: 'closed', matched,
         reason: matched ? undefined : json.reason ?? json.error ?? 'no_match',
-        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ...referral(matched, json.referralCode), ms: r.now() - t0, at: t0,
+        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ...referral(matched, json.referralCode), ...matchOf(matched, json.match), ms: r.now() - t0, at: t0,
       });
     } catch {
       return emit(id, { kind: 'deferred', route: 'clipboard', appState: 'closed', matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
