@@ -123,6 +123,7 @@ app state, with open reporting included:
 ```ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlayInstallReferrer } from 'react-native-play-install-referrer';
+import * as Application from 'expo-application';
 import { createStrait, fromPlayInstallReferrer } from '@straitlink/react-native';
 
 const strait = createStrait({
@@ -130,11 +131,24 @@ const strait = createStrait({
   endpoint: 'https://<your-handle>.strait.link',           // your workspace's link domain
   storage: AsyncStorage,                                   // required for reliable analytics
   installReferrer: fromPlayInstallReferrer(PlayInstallReferrer),
+  // Reinstalls from a link (see "Reinstalls and backups"). Expo: expo-application;
+  // bare React Native: react-native-device-info's getFirstInstallTime().
+  installTime: async () => (await Application.getInstallationTimeAsync()).getTime(),
 });
 strait.onLinkStart(() => showLoading());
 strait.onLink((e) => e.matched && e.path && navigate(e.path, e.params));
 strait.start();
 ```
+
+### Reinstalls and backups (`installTime`, contract B6a)
+
+Android backs up app storage (Auto Backup, on by default) and puts it back when the app is installed
+again; restored iPhones bring it back too. Without `installTime` the restored "deferred check done"
+flag makes a reinstall from a link skip its deferred link and go uncounted. With it, the SDK stores
+the install time next to the flag and runs the check again when the install time changed. An app
+update keeps its install time, so it never counts as a new install, and an app updated from an older
+SDK adopts the time without a new check. Optional extra on Android: exclude AsyncStorage from backup
+in your `dataExtractionRules` / `fullBackupContent`.
 
 For a settings or debug screen, `strait.checkDeferred()` asks again without touching the
 once-per-install flag, and the engine adds no install for it.
@@ -172,7 +186,9 @@ Every time a link opens the app, the SDK reports it once (contract B14):
 
 Reports that can't be sent (offline, server busy) are saved in `storage` and
 retried on the next start and whenever the app returns to the foreground, for
-up to 7 days (max 100). Reports and the saved queue never contain the query string
+up to 7 days (max 100). When the server is busy (429 or 5xx) the SDK waits before
+sending the saved ones again: 15–30 s, doubling each time in a row up to 1 hour, and at
+least as long as the server's `Retry-After`. Reports and the saved queue never contain the query string
 or fragment of the opened URL, only host + path and `utm_source` (contract B18). The engine de-duplicates by open id, so nothing is
 counted twice. Navigation never waits for a report. The first launch of an
 install is marked as such, so dashboards can tell **new users** (installed and
@@ -189,8 +205,14 @@ user agent, so this is the only way Strait can count iPad opens. A custom
 ### Conversion events (revenue on the exact tap)
 
 ```ts
-await strait.trackEvent('purchase', { value: 49.99, currency: 'USD' });
+await strait.trackEvent('purchase', { value: 49.99, currency: 'USD', eventId: order.id });
 ```
+
+`eventId` is your id for the conversion (your order id; 1-64 of `A-Z a-z 0-9 _ . : -`): Strait
+stores each one once, so a retry or a second report of the same order never counts twice. Left out,
+the SDK makes one. An event that can't be sent (offline, server busy) is kept with the saved open
+reports and sent later, for up to 7 days; `trackEvent` then resolves `false` (contract B13a).
+Refunds are not supported yet. Revenue you must trust (billing, payouts) belongs on your server with the secret key: the app's publishable key is public, so anyone who can guess an order id could send it first.
 
 The event carries the tap id of the last attributed link open for 7 days, so
 the dashboard can place the revenue on that tap's channel and A/B variant

@@ -9,6 +9,8 @@ import {
   AppStateTracker,
   classifyUrl,
   eventClickId,
+  firstLaunchState,
+  newEventId,
   reportUrl,
   staleTap,
   newOpenId,
@@ -21,6 +23,7 @@ import {
   replyClickId,
   replyReferralCode,
   shouldRetryReport,
+  retryDelayMs,
   splitUrl,
   type DeviceClass,
 } from './core.js';
@@ -174,6 +177,14 @@ export interface CreateStraitConfig {
   /** Android: returns the Play Install Referrer. See `fromPlayInstallReferrer`. */
   installReferrer?: () => Promise<string | null>;
   /**
+   * The app's install time in epoch ms (contract B6a), e.g. Expo
+   * `(await Application.getInstallationTimeAsync()).getTime()` or
+   * react-native-device-info `getFirstInstallTime()`. Storage restored from a backup of
+   * another install (Android Auto Backup, a restored phone) then still gets its
+   * deferred link and is counted. Left out = the once-per-install flag alone.
+   */
+  installTime?: () => Promise<number | null>;
+  /**
    * @deprecated Ignored. The workspace chooses the iPhone deferred-link method
    * in Dashboard → Settings → iPhone installs, and the SDK reads that choice
    * from the engine's /v1/match reply on the first launch (no app release
@@ -213,12 +224,12 @@ export interface Strait {
   /**
    * Conversion / revenue event. Resolves true when accepted. Carries the tap
    * id of the last attributed link open (≤7 days, contract B15) unless you
-   * pass `clickId` yourself.
+   * pass `clickId` yourself. Pass your order id as `eventId`: the engine
+   * stores each eventId once (else the SDK makes one). False = not accepted
+   * now; when the network or the server was the reason, the event is kept
+   * and sent later with the open reports (contract B13a).
    */
-  trackEvent(
-    name: string,
-    extra?: { value?: number; currency?: string; linkId?: string; clickId?: string },
-  ): Promise<boolean>;
+  trackEvent(name: string, extra?: TrackEventExtra): Promise<boolean>;
   /**
    * Store sheet (new): show the app store inside your app for
    * one of your short links and keep the deep link for the app being
@@ -240,6 +251,28 @@ export interface Strait {
   stop(): void;
 }
 
+export interface TrackEventExtra {
+  value?: number;
+  currency?: string;
+  linkId?: string;
+  clickId?: string;
+  /** Your id for this conversion, e.g. the order id (1-64 of A-Z a-z 0-9 _ . : -). Stored once. */
+  eventId?: string;
+}
+
+/** A conversion event saved for retry in the open-report queue (contract B13a). */
+interface QueuedEvent {
+  type: 'event';
+  at: number;
+  event: string;
+  platform: string;
+  eventId: string;
+  value?: number;
+  currency?: string;
+  linkId?: string;
+  clickId?: string;
+}
+
 /** One app open as reported to POST /v1/open (contract B14). */
 interface OpenReport {
   openId: string;
@@ -259,6 +292,7 @@ interface OpenReport {
 const DEFERRED_FLAG = 'strait.deferredChecked';
 const QUEUE_KEY = 'strait.pendingOpens';
 const TAP_KEY = 'strait.lastTap';
+const INSTALL_TIME_KEY = 'strait.installTime';
 /** Per request, like the Android SDK's 10 s connect/read timeouts. */
 const HTTP_TIMEOUT_MS = 10_000;
 export function createStrait(config: CreateStraitConfig): Strait {
@@ -322,7 +356,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         signal,
       });
       const json = await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, json: json as Record<string, any> };
+      return { ok: res.ok, status: res.status, json: json as Record<string, any>, retryAfter: res.headers?.get?.('retry-after') ?? null };
     });
 
   // ── Remembered tap (B15/B16): the tap id of the last attributed link open,
@@ -353,7 +387,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
     queueOp = p.catch(() => undefined);
     return p;
   };
-  const readQueue = async (): Promise<OpenReport[]> => {
+  type Queued = OpenReport | QueuedEvent;
+  const readQueue = async (): Promise<Queued[]> => {
     try {
       const v = JSON.parse((await storage.getItem(QUEUE_KEY)) ?? '[]');
       // B18: reports saved by an older SDK may hold a full URL; strip it here
@@ -363,17 +398,30 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return [];
     }
   };
-  const writeQueue = (q: OpenReport[]) => storage.setItem(QUEUE_KEY, JSON.stringify(q)).catch(() => undefined);
-  const enqueue = (report: OpenReport) =>
+  const writeQueue = (q: Queued[]) => storage.setItem(QUEUE_KEY, JSON.stringify(q)).catch(() => undefined);
+  const enqueue = (report: Queued) =>
     serial(async () => {
       const r = await rt();
       await writeQueue(pruneOpenQueue([...(await readQueue()), report], r.now()));
     });
-  /** POST /v1/open; resolves the HTTP status, or null when there was no answer. */
-  const sendReport = async (report: OpenReport): Promise<number | null> => {
+  // C1: after a 429/5xx the queue waits retryDelayMs (exponential, jittered, at least the
+  // Retry-After) before it sends again; any other answer ends the wait. No answer adds none.
+  let failures = 0;
+  let holdUntil = 0;
+  /** POST /v1/open (or /v1/event for a saved event); resolves the HTTP status, or null when there was no answer. */
+  const sendReport = async (report: Queued): Promise<number | null> => {
     try {
-      const dc = deviceClassOf(await rt());
-      return (await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report, ...dc })).status;
+      const r = await rt();
+      let res;
+      if ('type' in report && report.type === 'event') {
+        const { type: _t, at: _a, ...event } = report;
+        res = await call('POST', '/v1/event', { publishableKey: config.publishableKey, ...event });
+      } else {
+        res = await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report, ...deviceClassOf(r) });
+      }
+      if (shouldRetryReport(res.status)) holdUntil = r.now() + retryDelayMs(++failures, res.retryAfter, Math.random());
+      else failures = holdUntil = 0;
+      return res.status;
     } catch {
       return null;
     }
@@ -388,18 +436,18 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const flush = (): Promise<void> =>
     (flushing ??= serial(async () => {
       const r = await rt();
+      if (r.now() < holdUntil) return; // C1: the server asked us to wait
       const queue = pruneOpenQueue(await readQueue(), r.now());
-      const keep: OpenReport[] = [];
-      let offline = false;
+      const keep: Queued[] = [];
+      let stop = false;
       for (const rep of queue) {
-        // Once one gets no answer at all, keep the rest for later.
-        if (offline) {
+        // Once one gets no answer, a 429 or a 5xx, keep the rest for later.
+        if (stop) {
           keep.push(rep);
           continue;
         }
-        const status = await sendReport(rep);
-        offline = status === null;
-        if (shouldRetryReport(status)) keep.push(rep);
+        stop = shouldRetryReport(await sendReport(rep));
+        if (stop) keep.push(rep);
       }
       await writeQueue(keep);
     }).finally(() => {
@@ -618,7 +666,18 @@ export function createStrait(config: CreateStraitConfig): Strait {
       const initial = await r.getInitialURL().catch(() => null);
       // Unreadable storage counts as "already checked": never risk a stale
       // deferred jump on every launch. Write failures are ignored (never throw).
-      const firstLaunch = r.isWeb?.() !== true && (await storage.getItem(DEFERRED_FLAG).catch(() => '1')) !== '1';
+      // B6a: the install time stored with the flag tells a restored backup of another
+      // install from this one (then the check runs again).
+      let firstLaunch = false;
+      if (r.isWeb?.() !== true) {
+        const flag = await storage.getItem(DEFERRED_FLAG).catch(() => '1');
+        const stored = await storage.getItem(INSTALL_TIME_KEY).catch(() => null);
+        const installed = config.installTime ? await config.installTime().catch(() => null) : null;
+        const s = firstLaunchState(flag, stored, installed);
+        if (s.clearFlag) await storage.setItem(DEFERRED_FLAG, '').catch(() => undefined);
+        if (s.storeInstallTime !== null) await storage.setItem(INSTALL_TIME_KEY, s.storeInstallTime).catch(() => undefined);
+        firstLaunch = s.firstLaunch;
+      }
       isFirstLaunch = firstLaunch;
       const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
       if (initial) {
@@ -659,10 +718,22 @@ export function createStrait(config: CreateStraitConfig): Strait {
         await tapWrite;
         const stored = await storage.getItem(TAP_KEY).catch(() => null);
         if (staleTap(stored, r.now())) dropStaleTap(r.now());
-        const clickId = eventClickId(stored, r.now(), extra.clickId) ?? undefined;
-        return (await call('POST', '/v1/event', {
-          publishableKey: config.publishableKey, event: name, platform: r.platform(), ...extra, clickId,
-        })).ok;
+        const at = r.now();
+        const clickId = eventClickId(stored, at, extra.clickId) ?? undefined;
+        // B13a: built once (tap id chosen now), with an eventId so a retry is stored once.
+        const event: QueuedEvent = {
+          // String(): plain-JS apps pass number order ids; the engine only takes strings.
+          type: 'event', at, event: name, platform: r.platform(),
+          eventId: extra.eventId != null && extra.eventId !== '' ? String(extra.eventId) : newEventId(at),
+          ...(extra.value !== undefined ? { value: extra.value } : {}),
+          ...(extra.currency !== undefined ? { currency: extra.currency } : {}),
+          ...(extra.linkId !== undefined ? { linkId: extra.linkId } : {}),
+          ...(clickId ? { clickId } : {}),
+        };
+        const status = await sendReport(event);
+        if (shouldRetryReport(status)) await enqueue(event);
+        else void flush(); // the network works: send anything saved earlier
+        return status !== null && status >= 200 && status < 300;
       } catch {
         return false;
       }

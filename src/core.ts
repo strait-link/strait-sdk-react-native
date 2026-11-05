@@ -333,11 +333,67 @@ export function shouldRetryReport(status: number | null): boolean {
   return status === null || status === 429 || status >= 500;
 }
 
+/** C1 backoff: the first hold after a 429/5xx is 15-30 s; each one in a row doubles it, up to RETRY_MAX_MS. */
+export const RETRY_BASE_MS = 30_000;
+/** C1 backoff: never hold the queue longer than 1 hour (Retry-After included). */
+export const RETRY_MAX_MS = 3_600_000;
+
+/**
+ * How long to hold the open/event queue after the `failures`-th 429/5xx answer in a row (contract B14, C1).
+ * Exponential with equal jitter: step = min(RETRY_MAX_MS, RETRY_BASE_MS × 2^(failures−1)), wait
+ * floor(step/2 + random × step/2), so phones that failed together spread out. A Retry-After in whole
+ * seconds (1-9 ASCII digits, spaces trimmed; an HTTP date or anything else is ignored) is a floor. The
+ * result never exceeds RETRY_MAX_MS. `random` is in [0, 1] (the platform's random number).
+ */
+export function retryDelayMs(failures: number, retryAfter: string | null | undefined, random: number): number {
+  const n = Math.min(Math.max(Math.floor(failures) || 1, 1), 17);
+  const half = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (n - 1)) / 2;
+  const r = Math.min(Math.max(random || 0, 0), 1);
+  const backoff = Math.floor(half + r * half);
+  const m = typeof retryAfter === 'string' ? /^[0-9]{1,9}$/.exec(retryAfter.trim()) : null;
+  const server = m ? Math.min(Number(m[0]), RETRY_MAX_MS / 1000) * 1000 : 0;
+  return Math.min(RETRY_MAX_MS, Math.max(backoff, server));
+}
+
 /** A unique id for one link open (the engine de-duplicates retries by it). */
 export function newOpenId(now: number, random: () => number = Math.random): string {
   let r = '';
   for (let i = 0; i < 12; i++) r += 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(random() * 36)];
   return `o_${now.toString(36)}_${r}`;
+}
+
+/**
+ * A unique id for one conversion event when the app gives none (contract B13a): the engine
+ * stores an eventId once, so a retried send is never counted twice. Same shape as newOpenId.
+ */
+export function newEventId(now: number, random: () => number = Math.random): string {
+  return `e${newOpenId(now, random).slice(1)}`;
+}
+
+/** What start() does with the once-per-install flag (contract B6a, shared-spec ADR 0003). */
+export interface FirstLaunchState {
+  /** Run the once-per-install deferred check / count this launch as the install's first. */
+  firstLaunch: boolean;
+  /** Set `strait.deferredChecked` to '' first: the storage came back from another install. */
+  clearFlag: boolean;
+  /** Then write this to `strait.installTime` (null = leave it). */
+  storeInstallTime: string | null;
+}
+
+/**
+ * B6a: storage restored from a backup of another install (Android Auto Backup, a restored
+ * phone) brings back `strait.deferredChecked`. The app's install time, stored next to it,
+ * tells: a different stored time = a new install, so the check runs again. No stored time
+ * (an app updated from an older SDK) = adopt it, never a new install. Unknown install time
+ * (null, 0, negative, not finite) = the B6 rule alone.
+ */
+export function firstLaunchState(flag: string | null | undefined, storedInstallTime: string | null | undefined, installTime: number | null | undefined): FirstLaunchState {
+  const t = typeof installTime === 'number' && Number.isFinite(installTime) && installTime >= 1 ? String(Math.trunc(installTime)) : null;
+  const stored = storedInstallTime || null;
+  if (flag !== '1') return { firstLaunch: true, clearFlag: false, storeInstallTime: t !== null && t !== stored ? t : null };
+  if (t === null || t === stored) return { firstLaunch: false, clearFlag: false, storeInstallTime: null };
+  if (stored === null) return { firstLaunch: false, clearFlag: false, storeInstallTime: t };
+  return { firstLaunch: true, clearFlag: true, storeInstallTime: t };
 }
 
 /** A link arriving this soon after the app came back to the front came "from background". */
