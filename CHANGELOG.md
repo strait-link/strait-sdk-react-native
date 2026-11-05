@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- New: every call that records an app open or install (`/v1/open`, `/v1/resolve`, `/v1/referrer`,
+  `/v1/match`, `/v1/handoff/claim`) now sends this SDK's version (`sdkVersion`) and, when you pass the new
+  `appVersion` option to `createStrait` (or the legacy `resolveDeferredLink`), your app's version, so support
+  can see which build a person had when links "stopped working". React Native has no built-in way to read the
+  app version, so pass it yourself: Expo `Application.nativeApplicationVersion`, bare React Native
+  react-native-device-info `getVersion()`. Trimmed and cut to 64 printable ASCII characters, else not sent.
+  Opens saved offline keep the versions they were made with. `/v1/lookup` (opted out) and `/v1/event` send
+  neither; an engine that doesn't know the fields ignores them.
 - Security (example app only, no SDK change): `examples/expo` no longer locks build-tool packages with known
   advisories: node-forge 1.4.0 -> 1.4.3 (12 advisories), glob 13 -> 14.0.3 and minimatch 10 -> 11.0.4 (the
   versions Expo 57.0.32 moved to), uuid 7 -> 11.1.1 for `xcode` only (it uses only `uuid.v4()`). The published

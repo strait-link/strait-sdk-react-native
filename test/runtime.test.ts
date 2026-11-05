@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SDK_VERSION } from '../src/core.js';
 
 // Mutable per test: the platform and the app's own StraitInstallReferrer module.
 const rn = vi.hoisted(() => ({
@@ -106,7 +107,7 @@ describe('legacy resolveDeferredLink on Android reads the StraitInstallReferrer 
       const r = await resolveDeferredLink({ publishableKey: 'st_pub_live_x', endpoint: 'https://x.strait.link', fetch });
       expect(r).toMatchObject({ matched: true, matchMethod: 'install_referrer' });
       expect(calls).toEqual([
-        { url: 'https://x.strait.link/v1/referrer', body: { publishableKey: 'st_pub_live_x', linkId: 'lnk_42', platform: 'android' } },
+        { url: 'https://x.strait.link/v1/referrer', body: { publishableKey: 'st_pub_live_x', linkId: 'lnk_42', platform: 'android', sdkVersion: SDK_VERSION } },
       ]);
     });
   }

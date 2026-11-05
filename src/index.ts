@@ -1,5 +1,5 @@
 import type { NativeAdapter } from './adapter.js';
-import { parseStraitLink } from './core.js';
+import { parseStraitLink, versionFields } from './core.js';
 import type { KeyValueStore } from './strait.js';
 
 export type { DeviceFields, NativeAdapter } from './adapter.js';
@@ -24,6 +24,8 @@ export interface StraitConfig {
    * sends nothing and returns no match. Left out, the switch can't be read and the check runs.
    */
   storage?: KeyValueStore;
+  /** Your app's version, sent as `appVersion` with the install check (see `CreateStraitConfig.appVersion`). */
+  appVersion?: string;
 }
 
 export interface MatchResult {
@@ -68,6 +70,7 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
 
   const platform = adapter.platform();
   const base = config.endpoint.replace(/\/+$/, '');
+  const versions = versionFields(config.appVersion);
 
   const post = async (path: string, body: unknown): Promise<MatchResult> => {
     try {
@@ -92,7 +95,7 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
       linkId = null;
     }
     if (linkId) {
-      const r = await post('/v1/referrer', { publishableKey: config.publishableKey, linkId, platform });
+      const r = await post('/v1/referrer', { publishableKey: config.publishableKey, linkId, platform, ...versions });
       if (r.matched) return r;
       // else fall through to the probabilistic path
     }
@@ -105,7 +108,7 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
   } catch {
     return NONE;
   }
-  return post('/v1/match', { publishableKey: config.publishableKey, platform, ...device });
+  return post('/v1/match', { publishableKey: config.publishableKey, platform, ...device, ...versions });
 }
 
 export {
