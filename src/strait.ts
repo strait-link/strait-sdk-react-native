@@ -264,7 +264,8 @@ export interface Strait {
    * Opt-out switch for consent flows (default on, kept in `storage` across launches). Off: no open
    * reports, no events, no deferred or clipboard matching, nothing remembered; reports saved earlier
    * and the remembered tap are deleted. A link that carries its own destination still reaches
-   * onLink; a short link needs a lookup that counts the tap, so it comes back `reason: 'disabled'`.
+   * onLink; a short link is looked up through /v1/lookup, which records nothing (no tap, no open,
+   * no tap id), so it still routes (`reason: 'disabled'` only if that lookup fails).
    * Back on: sending resumes, and a first-launch check skipped while off runs now.
    */
   setEnabled(enabled: boolean): Promise<void>;
@@ -381,10 +382,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
       clearTimeout(timer);
     }
   };
-  // Every engine call goes through here: while opted out nothing leaves the device.
-  const call = (method: 'GET' | 'POST', path: string, body?: unknown) =>
+  // Every engine call goes through here: while opted out nothing leaves the device, except
+  // `lookupOnly` (/v1/lookup: where a short link goes, recorded nowhere, ADR 0083 in the engine).
+  const call = (method: 'GET' | 'POST', path: string, body?: unknown, lookupOnly = false) =>
     timed(async (signal) => {
-      if (!(await isEnabled())) throw new Error('disabled');
+      if (!lookupOnly && !(await isEnabled())) throw new Error('disabled');
       const res = await doFetch(`${base}${path}`, {
         method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -511,8 +513,15 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'invalid_url', ms: r.now() - t0, at: t0 });
     }
     if (c.needsResolve && !on) {
-      // Opted out: the lookup would count the tap, so a short link can't be resolved.
-      return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'disabled', ms: r.now() - t0, at: t0 });
+      // Opted out: ask only where the link goes (/v1/lookup records nothing). Key + host + path only;
+      // no open report, no tap kept, no retry. An engine without it (404) or no network: 'disabled'.
+      const json = await call('POST', '/v1/lookup', { publishableKey: config.publishableKey, url: reportUrl(raw) }, true)
+        .then((x) => (x.ok ? x.json : {}), () => ({} as Record<string, any>));
+      const matched = json.matched === true;
+      return emit(id, {
+        kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason: matched ? undefined : json.reason ?? 'disabled',
+        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ms: r.now() - t0, at: t0,
+      });
     }
     if (c.needsResolve) {
       // The lookup is also the open report (openId); the engine says whether
