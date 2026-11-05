@@ -3,6 +3,7 @@ import { parseStraitLink } from './core.js';
 
 export type { DeviceFields, NativeAdapter } from './adapter.js';
 export { computeSignature, h32 } from './signature.js';
+export type { MatchInfo } from './core.js';
 
 export interface StraitConfig {
   /**

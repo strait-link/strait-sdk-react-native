@@ -84,3 +84,38 @@ describe('B21: referralCode on deferred LinkEvents', () => {
     }
   });
 });
+
+// Engine ADR 0081: a matched deferred reply says how it matched and how sure it is.
+describe('match (method + confidence) on deferred LinkEvents', () => {
+  it('Android Play referrer', async () => {
+    const match = { method: 'install_referrer', confidence: 'exact' };
+    const { events } = await run('android', { '/v1/referrer': { ...MATCHED, matchMethod: 'install_referrer', match } }, { referrer: 'strait_link=lnk_42' });
+    expect(events[0]).toMatchObject({ route: 'install_referrer', matched: true, match });
+  });
+  it('iPhone match', async () => {
+    const match = { method: 'fingerprint', confidence: 'probable' };
+    const { events } = await run('ios', { '/v1/match': { ...MATCHED, matchMethod: 'exact_ext', match } });
+    expect(events[0]).toMatchObject({ route: 'fingerprint', matched: true, match });
+  });
+  it('clipboard boost claim', async () => {
+    const match = { method: 'clipboard', confidence: 'exact' };
+    const clipboard: ClipboardAccess = { hasProbableWebUrl: async () => true, readText: async () => HANDOFF };
+    const { events } = await run('ios', {
+      '/v1/match': { matched: false, ios: { deviceMatching: true, pasteHandoff: true } },
+      '/v1/handoff/claim': { ...MATCHED, matchMethod: 'clipboard', match },
+    }, { clipboard });
+    expect(events[0]).toMatchObject({ route: 'clipboard', matched: true, match });
+  });
+  it('Paste button (claimHandoff)', async () => {
+    const match = { method: 'clipboard', confidence: 'exact' };
+    const { strait } = await run('ios', { '/v1/match': { matched: false }, '/v1/handoff/claim': { ...MATCHED, matchMethod: 'clipboard', match } });
+    expect(await strait.claimHandoff(HANDOFF)).toMatchObject({ matched: true, match });
+  });
+  it('absent from the reply, malformed, or no match: no field', async () => {
+    const m = { method: 'fingerprint', confidence: 'probable' };
+    for (const reply of [{ ...MATCHED }, { ...MATCHED, match: null }, { ...MATCHED, match: 'exact' }, { ...MATCHED, match: { method: 1 } }, { matched: false, match: m }]) {
+      const { events } = await run('ios', { '/v1/match': reply });
+      expect(events[0]).not.toHaveProperty('match');
+    }
+  });
+});

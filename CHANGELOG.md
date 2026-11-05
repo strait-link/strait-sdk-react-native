@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- New: a matched deferred `LinkEvent` has `match: { method, confidence }`, how the engine matched
+  (`install_referrer`, `clipboard`, `fingerprint`, `test`) and how sure it is (`exact`, `high`, `probable`);
+  absent when not matched or the engine doesn't send it (engine ADR 0081). New exported type `MatchInfo`.
+
 ## 0.11.0 (5 Nov 2026)
 
 - Fix: reinstalls from a link are no longer lost. Android Auto Backup and restored iPhones put back

@@ -272,6 +272,9 @@ Associated Domains).
 | Android (no referrer) / iOS with Device matching on | server-side device fingerprint | probabilistic (`exact_ext` → `exact_core`; on iOS also `scored` when the workspace uses scored matching) |
 | iOS with Paste handoff on | one-time handoff link copied by the tap page | exact (`clipboard`) |
 
+Every matched deferred `LinkEvent` also has `match`, e.g. `{ method: 'fingerprint', confidence: 'probable' }`
+(`exact` for `install_referrer` and `clipboard`): why this install was attributed. Absent when not matched.
+
 The SDK collects only coarse device fields (screen width, pixel ratio, the
 device's language tag such as `en-US`, timezone); the server uses only the first
 two letters of the language. The **server** adds the IP it observes and
