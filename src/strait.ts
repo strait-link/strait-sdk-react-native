@@ -406,7 +406,14 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const setTap = (value: string) => {
     tapWrite = tapWrite.then(() => storage.setItem(TAP_KEY, value)).catch(() => undefined);
   };
-  const noteTap = (clickId: string | null | undefined, at: number) => setTap(clickId ? rememberTap(clickId, at) : '');
+  // Checked inside the chain: a reply that lands after setEnabled(false) keeps no tap.
+  const noteTap = (clickId: string | null | undefined, at: number) => {
+    tapWrite = tapWrite
+      .then(async () => {
+        if (await isEnabled()) await storage.setItem(TAP_KEY, clickId ? rememberTap(clickId, at) : '');
+      })
+      .catch(() => undefined);
+  };
   /** B18: delete an expired remembered tap instead of only ignoring it. Re-read
    *  inside the write chain so a newer tap written meanwhile is never lost. */
   const dropStaleTap = (now: number) => {
@@ -512,9 +519,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
     if (!c) {
       return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'invalid_url', ms: r.now() - t0, at: t0 });
     }
-    if (c.needsResolve && !on) {
-      // Opted out: ask only where the link goes (/v1/lookup records nothing). Key + host + path, no query;
-      // no open report, no tap kept, no retry. An engine without it (404) or no network: 'disabled'.
+    // Opted out: ask only where the link goes (/v1/lookup records nothing). Key + host + path, no query;
+    // no open report, no tap kept, no retry. An engine without it (404) or no network: 'disabled'.
+    const lookupOnly = async () => {
       const json = await call('POST', '/v1/lookup', { publishableKey: config.publishableKey, url: reportUrl(raw).split('?')[0] }, true)
         .then((x) => (x.ok ? x.json : {}), () => ({} as Record<string, any>));
       const matched = json.matched === true;
@@ -523,7 +530,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
         kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason: matched ? undefined : str(json.reason) ?? 'disabled',
         ...destination(matched ? str(json.longUrl) : undefined), linkId: str(json.linkId), ms: r.now() - t0, at: t0,
       });
-    }
+    };
+    if (c.needsResolve && !on) return lookupOnly();
     if (c.needsResolve) {
       // The lookup is also the open report (openId); the engine says whether
       // it recorded it, and anything short of that is retried via /v1/open.
@@ -544,6 +552,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
           ms: r.now() - t0, at: t0,
         });
       } catch {
+        // Switched off while the resolve was out (F4): route the way an opted-out tap does.
+        if (!(await isEnabled())) return lookupOnly();
         void enqueue({ ...base, reason: 'network' });
         return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
       }
