@@ -513,14 +513,15 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'invalid_url', ms: r.now() - t0, at: t0 });
     }
     if (c.needsResolve && !on) {
-      // Opted out: ask only where the link goes (/v1/lookup records nothing). Key + host + path only;
+      // Opted out: ask only where the link goes (/v1/lookup records nothing). Key + host + path, no query;
       // no open report, no tap kept, no retry. An engine without it (404) or no network: 'disabled'.
-      const json = await call('POST', '/v1/lookup', { publishableKey: config.publishableKey, url: reportUrl(raw) }, true)
+      const json = await call('POST', '/v1/lookup', { publishableKey: config.publishableKey, url: reportUrl(raw).split('?')[0] }, true)
         .then((x) => (x.ok ? x.json : {}), () => ({} as Record<string, any>));
       const matched = json.matched === true;
+      const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
       return emit(id, {
-        kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason: matched ? undefined : json.reason ?? 'disabled',
-        ...destination(matched ? json.longUrl : undefined), linkId: json.linkId, ms: r.now() - t0, at: t0,
+        kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason: matched ? undefined : str(json.reason) ?? 'disabled',
+        ...destination(matched ? str(json.longUrl) : undefined), linkId: str(json.linkId), ms: r.now() - t0, at: t0,
       });
     }
     if (c.needsResolve) {

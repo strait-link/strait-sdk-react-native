@@ -77,26 +77,32 @@ describe('setEnabled (opt-out)', () => {
     await strait.flushOpenReports();
     await settle();
     expect(e.calls).toEqual(['/v1/lookup']);
-    // Only the key and host + path (+ utm_source) leave the device: no openId, platform, device or app state.
-    expect(e.bodies[0]).toEqual({ publishableKey: 'st_pub_test_x', url: 'https://acme.strait.link/sale?utm_source=sms' });
+    // Only the key and host + path leave the device: no query, openId, platform, device or app state.
+    expect(e.bodies[0]).toEqual({ publishableKey: 'st_pub_test_x', url: 'https://acme.strait.link/sale' });
     expect(links).toContainEqual(expect.objectContaining({ matched: true, path: '/p/42', params: { color: 'red' } }));
     expect(links[0]).not.toHaveProperty('clickId');
     expect(await strait.pendingOpenReports()).toBe(0);
     expect(s.data.get('strait.lastTap') ?? '').toBe(''); // no tap remembered
   });
 
-  it('disabled: an engine without /v1/lookup (404) or no network: reason disabled, nothing queued', async () => {
-    const e = engine(() => ({ status: 404, json: { error: 'not found' } }));
-    const s = store();
-    const { strait, rt } = make(e, s);
-    const links: Array<{ matched: boolean; reason?: string }> = [];
-    strait.onLink((l) => links.push(l));
-    await strait.setEnabled(false);
-    await strait.start();
-    rt.open('https://acme.strait.link/sale');
-    await settle();
-    expect(links).toContainEqual(expect.objectContaining({ matched: false, reason: 'disabled' }));
-    expect(await strait.pendingOpenReports()).toBe(0);
+  it('disabled: an engine without /v1/lookup (404) or no network: reason disabled, nothing queued; a 200 miss keeps its reason', async () => {
+    const cases: Array<[(p: string) => { status: number; json: object }, string]> = [
+      [() => ({ status: 404, json: { error: 'not found' } }), 'disabled'],
+      [() => { throw new TypeError('Network request failed'); }, 'disabled'],
+      [() => ({ status: 200, json: { matched: false, reason: 'expired' } }), 'expired'],
+    ];
+    for (const [reply, reason] of cases) {
+      const s = store();
+      const { strait, rt } = make(engine(reply), s);
+      const links: Array<{ matched: boolean; reason?: string }> = [];
+      strait.onLink((l) => links.push(l));
+      await strait.setEnabled(false);
+      await strait.start();
+      rt.open('https://acme.strait.link/sale');
+      await settle();
+      expect(links).toEqual([expect.objectContaining({ matched: false, reason })]);
+      expect(await strait.pendingOpenReports()).toBe(0);
+    }
   });
 
   it('persists across launches', async () => {
