@@ -23,6 +23,7 @@ import {
   replyClickId,
   replyReferralCode,
   shouldRetryReport,
+  retryDelayMs,
   splitUrl,
   type DeviceClass,
 } from './core.js';
@@ -355,7 +356,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         signal,
       });
       const json = await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, json: json as Record<string, any> };
+      return { ok: res.ok, status: res.status, json: json as Record<string, any>, retryAfter: res.headers?.get?.('retry-after') ?? null };
     });
 
   // ── Remembered tap (B15/B16): the tap id of the last attributed link open,
@@ -403,15 +404,24 @@ export function createStrait(config: CreateStraitConfig): Strait {
       const r = await rt();
       await writeQueue(pruneOpenQueue([...(await readQueue()), report], r.now()));
     });
+  // C1: after a 429/5xx the queue waits retryDelayMs (exponential, jittered, at least the
+  // Retry-After) before it sends again; any other answer ends the wait. No answer adds none.
+  let failures = 0;
+  let holdUntil = 0;
   /** POST /v1/open (or /v1/event for a saved event); resolves the HTTP status, or null when there was no answer. */
   const sendReport = async (report: Queued): Promise<number | null> => {
     try {
+      const r = await rt();
+      let res;
       if ('type' in report && report.type === 'event') {
         const { type: _t, at: _a, ...event } = report;
-        return (await call('POST', '/v1/event', { publishableKey: config.publishableKey, ...event })).status;
+        res = await call('POST', '/v1/event', { publishableKey: config.publishableKey, ...event });
+      } else {
+        res = await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report, ...deviceClassOf(r) });
       }
-      const dc = deviceClassOf(await rt());
-      return (await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report, ...dc })).status;
+      if (shouldRetryReport(res.status)) holdUntil = r.now() + retryDelayMs(++failures, res.retryAfter, Math.random());
+      else failures = holdUntil = 0;
+      return res.status;
     } catch {
       return null;
     }
@@ -426,18 +436,18 @@ export function createStrait(config: CreateStraitConfig): Strait {
   const flush = (): Promise<void> =>
     (flushing ??= serial(async () => {
       const r = await rt();
+      if (r.now() < holdUntil) return; // C1: the server asked us to wait
       const queue = pruneOpenQueue(await readQueue(), r.now());
       const keep: Queued[] = [];
-      let offline = false;
+      let stop = false;
       for (const rep of queue) {
-        // Once one gets no answer at all, keep the rest for later.
-        if (offline) {
+        // Once one gets no answer, a 429 or a 5xx, keep the rest for later.
+        if (stop) {
           keep.push(rep);
           continue;
         }
-        const status = await sendReport(rep);
-        offline = status === null;
-        if (shouldRetryReport(status)) keep.push(rep);
+        stop = shouldRetryReport(await sendReport(rep));
+        if (stop) keep.push(rep);
       }
       await writeQueue(keep);
     }).finally(() => {

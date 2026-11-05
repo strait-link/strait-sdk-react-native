@@ -7,6 +7,7 @@ import { createStrait, type StraitRuntime, type KeyValueStore, type LinkEvent } 
 const PK = 'bk_pub_test_appowner01';
 const ENDPOINT = 'https://links.test';
 const CLICK = '3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f';
+const HOUR = 3_600_000;
 const OPEN_ID = /^o_[a-z0-9]+_[a-z0-9]{12}$/;
 const device = { screenWidth: 411, pixelRatio: 2.625, language: 'en', timezone: 'Asia/Kolkata' };
 
@@ -32,7 +33,7 @@ function memoryStore(): KeyValueStore & { data: Map<string, string> } {
   return { data, getItem: async (k) => data.get(k) ?? null, setItem: async (k, v) => void data.set(k, v) };
 }
 
-type Reply = { status?: number; body?: unknown } | 'offline' | 'hang';
+type Reply = { status?: number; body?: unknown; headers?: Record<string, string> } | 'offline' | 'hang';
 /** Fake engine whose answer per path can change mid-test. */
 function fakeEngine(routes: Record<string, Reply>) {
   const calls: Array<{ path: string; body: any }> = [];
@@ -43,7 +44,8 @@ function fakeEngine(routes: Record<string, Reply>) {
     if (r === 'offline') throw new TypeError('Network request failed');
     if (r === 'hang') return new Promise<Response>(() => undefined);
     const status = r.status ?? 200;
-    return { ok: status < 400, status, json: async () => r.body ?? {} } as Response;
+    const headers = new Headers(r.headers ?? {});
+    return { ok: status < 400, status, headers, json: async () => r.body ?? {} } as Response;
   }) as unknown as typeof fetch;
   return { fetch, calls, routes, of: (path: string) => calls.filter((c) => c.path === path) };
 }
@@ -153,9 +155,113 @@ describe('the retry queue', () => {
     await settle();
     expect(await strait.pendingOpenReports()).toBe(1);
     engine.routes['/v1/open'] = { status: 429 };
+    rt.advance(HOUR); // past the backoff hold (C1)
     await strait.flushOpenReports();
     expect(await strait.pendingOpenReports()).toBe(1);
     engine.routes['/v1/open'] = { status: 400, body: { error: 'bad' } };
+    rt.advance(HOUR);
+    await strait.flushOpenReports();
+    expect(await strait.pendingOpenReports()).toBe(0);
+  });
+
+  // C1: a server under load (429/5xx) is not hammered by every phone's queue.
+  const queueThree = async (rt: ReturnType<typeof fakeRuntime>, engine: ReturnType<typeof fakeEngine>, strait: ReturnType<typeof make>['strait']) => {
+    engine.routes['/v1/open'] = 'offline';
+    for (const p of [1, 2, 3]) rt.tap(`straitlink://a.b/${p}`);
+    await settle();
+    expect(await strait.pendingOpenReports()).toBe(3);
+    engine.calls.length = 0;
+  };
+  it('stops the flush at the first 429 or 5xx; the rest stay saved and unsent', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({});
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await queueThree(rt, engine, strait);
+    engine.routes['/v1/open'] = { status: 503 };
+    await strait.flushOpenReports();
+    expect(engine.of('/v1/open')).toHaveLength(1);
+    expect(await strait.pendingOpenReports()).toBe(3);
+  });
+  it('holds the queue for the Retry-After of a 429 (start, foreground and flushOpenReports all wait)', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({});
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await queueThree(rt, engine, strait);
+    engine.routes['/v1/open'] = { status: 429, headers: { 'Retry-After': '120' } };
+    await strait.flushOpenReports();
+    expect(engine.of('/v1/open')).toHaveLength(1);
+    engine.routes['/v1/open'] = ACCEPTED;
+    rt.advance(119_000);
+    await strait.flushOpenReports();
+    expect(engine.of('/v1/open')).toHaveLength(1); // held
+    rt.setState('background'); rt.advance(5000); rt.setState('active'); // foreground at 124 s: past the hold
+    await settle();
+    expect(engine.of('/v1/open')).toHaveLength(4);
+    expect(await strait.pendingOpenReports()).toBe(0);
+  });
+  it('waits before 120 s: nothing is sent while held', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({});
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await queueThree(rt, engine, strait);
+    engine.routes['/v1/open'] = { status: 429, headers: { 'Retry-After': '120' } };
+    await strait.flushOpenReports();
+    engine.routes['/v1/open'] = ACCEPTED;
+    rt.advance(119_999);
+    await strait.flushOpenReports();
+    rt.setState('background'); rt.setState('active');
+    await settle();
+    expect(engine.of('/v1/open')).toHaveLength(1);
+    rt.advance(1);
+    await strait.flushOpenReports();
+    expect(engine.of('/v1/open')).toHaveLength(4);
+  });
+  it('without Retry-After backs off exponentially with jitter (15-30 s, then 30-60 s); an answer resets it', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({});
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await queueThree(rt, engine, strait);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0); // the shortest jitter: half the step
+    try {
+      engine.routes['/v1/open'] = { status: 503 };
+      await strait.flushOpenReports(); // failure 1: hold 15 s
+      rt.advance(14_999);
+      await strait.flushOpenReports();
+      expect(engine.of('/v1/open')).toHaveLength(1);
+      rt.advance(1);
+      await strait.flushOpenReports(); // failure 2: hold 30 s
+      expect(engine.of('/v1/open')).toHaveLength(2);
+      rt.advance(29_999);
+      await strait.flushOpenReports();
+      expect(engine.of('/v1/open')).toHaveLength(2);
+      rt.advance(1);
+      engine.routes['/v1/open'] = ACCEPTED;
+      await strait.flushOpenReports(); // answered: sent, hold cleared
+      expect(engine.of('/v1/open')).toHaveLength(5);
+      engine.routes['/v1/open'] = { status: 502 };
+      rt.tap('straitlink://a.b/4'); // live report fails: failure 1 again (15 s, not 60 s)
+      await settle();
+      engine.routes['/v1/open'] = ACCEPTED;
+      rt.advance(15_000);
+      await strait.flushOpenReports();
+      expect(await strait.pendingOpenReports()).toBe(0);
+    } finally {
+      random.mockRestore();
+    }
+  });
+  it('no answer (offline) adds no hold: the next foreground sends', async () => {
+    const rt = fakeRuntime();
+    const engine = fakeEngine({});
+    const { strait } = make(rt, engine, returning());
+    await strait.start();
+    await queueThree(rt, engine, strait);
+    await strait.flushOpenReports(); // still offline: stops at the first
+    expect(engine.of('/v1/open')).toHaveLength(1);
+    engine.routes['/v1/open'] = ACCEPTED;
     await strait.flushOpenReports();
     expect(await strait.pendingOpenReports()).toBe(0);
   });

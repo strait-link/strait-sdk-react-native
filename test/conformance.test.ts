@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AppStateTracker, browserScreenWidth, portraitScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
-  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize, firstLaunchState,
+  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize, firstLaunchState, retryDelayMs,
   ATTRIBUTION_WINDOW_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
 
@@ -50,8 +50,8 @@ describe('conformance vectors', () => {
   it.each(v.parseHandoffUrl)('parseHandoffUrl: $name', ({ text, linkHosts, expected }) => {
     expect(parseHandoffUrl(text, linkHosts)).toBe(expected);
   });
-  it('vectors v10', () => {
-    expect(v.version).toBe(10);
+  it('vectors v11', () => {
+    expect(v.version).toBe(11);
   });
   it.each(v.takeClickId)('takeClickId($input)', ({ input, expected }) => {
     expect(takeClickId(input)).toEqual(expected);
@@ -61,6 +61,9 @@ describe('conformance vectors', () => {
   });
   it.each(v.retry)('shouldRetryReport($status)', ({ status, expected }) => {
     expect(shouldRetryReport(status)).toBe(expected);
+  });
+  it.each(v.retryDelay)('retryDelayMs: $name', ({ failures, retryAfter, random, expected }) => {
+    expect(retryDelayMs(failures, retryAfter, random)).toBe(expected);
   });
   it.each(v.classify)('classifyUrl($raw)', ({ raw, linkHosts, expected }) => {
     expect(classifyUrl(raw, linkHosts)).toEqual(expected);

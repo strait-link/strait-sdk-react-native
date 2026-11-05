@@ -11,7 +11,11 @@
   the SDK makes one, so a retry never counts twice. Events that can't be sent (offline, 429, 5xx) are
   kept in the open-report queue and sent later; `pendingOpenReports()` counts them (contract B13a,
   ADR 0004). New exported type `TrackEventExtra`.
-- Conformance vectors v10 (`firstLaunchState`).
+- Fix: when the server is busy (429 or 5xx) the saved queue no longer sends its whole backlog on
+  every foreground. A flush stops at the first 429/5xx and the queue waits 15–30 s, doubling each
+  time in a row up to 1 hour, and at least the server's `Retry-After` (contract B14 backoff, C1,
+  shared-spec ADR 0005). New opens and events are still sent once when they happen.
+- Conformance vectors v11 (`firstLaunchState`, `retryDelay`).
 
 ## 0.10.2 (26 Oct 2026)
 

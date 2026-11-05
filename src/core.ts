@@ -333,6 +333,28 @@ export function shouldRetryReport(status: number | null): boolean {
   return status === null || status === 429 || status >= 500;
 }
 
+/** C1 backoff: the first hold after a 429/5xx is 15-30 s; each one in a row doubles it, up to RETRY_MAX_MS. */
+export const RETRY_BASE_MS = 30_000;
+/** C1 backoff: never hold the queue longer than 1 hour (Retry-After included). */
+export const RETRY_MAX_MS = 3_600_000;
+
+/**
+ * How long to hold the open/event queue after the `failures`-th 429/5xx answer in a row (contract B14, C1).
+ * Exponential with equal jitter: step = min(RETRY_MAX_MS, RETRY_BASE_MS × 2^(failures−1)), wait
+ * floor(step/2 + random × step/2), so phones that failed together spread out. A Retry-After in whole
+ * seconds (1-9 ASCII digits, spaces trimmed; an HTTP date or anything else is ignored) is a floor. The
+ * result never exceeds RETRY_MAX_MS. `random` is in [0, 1] (the platform's random number).
+ */
+export function retryDelayMs(failures: number, retryAfter: string | null | undefined, random: number): number {
+  const n = Math.min(Math.max(Math.floor(failures) || 1, 1), 17);
+  const half = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (n - 1)) / 2;
+  const r = Math.min(Math.max(random || 0, 0), 1);
+  const backoff = Math.floor(half + r * half);
+  const m = typeof retryAfter === 'string' ? /^[0-9]{1,9}$/.exec(retryAfter.trim()) : null;
+  const server = m ? Math.min(Number(m[0]), RETRY_MAX_MS / 1000) * 1000 : 0;
+  return Math.min(RETRY_MAX_MS, Math.max(backoff, server));
+}
+
 /** A unique id for one link open (the engine de-duplicates retries by it). */
 export function newOpenId(now: number, random: () => number = Math.random): string {
   let r = '';
