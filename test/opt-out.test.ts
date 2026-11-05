@@ -195,6 +195,53 @@ describe('setEnabled (opt-out)', () => {
     });
   });
 
+  // F7: switched off during the first-launch check: no clipboard read (iOS shows a paste prompt).
+  describe('iPhone clipboard (paste handoff) after switching off mid-check', () => {
+    const iosRuntime = (): StraitRuntime => ({ ...runtime().runtime, platform: () => 'ios' });
+    const handoff = 'https://acme.strait.link/h/AbCdEfGhIjKlMnOpQrStUv';
+    const pasteOnReply = { status: 200, json: { matched: false, matchMethod: 'none', ios: { deviceMatching: true, pasteHandoff: true } } };
+    const setup = (offDuringMatch: boolean) => {
+      const used: string[] = [];
+      const calls: string[] = [];
+      let strait!: ReturnType<typeof createStrait>;
+      const fetch = (async (url: string) => {
+        const path = new URL(url).pathname;
+        calls.push(path);
+        if (path === '/v1/match' && offDuringMatch) await strait.setEnabled(false);
+        const r = path === '/v1/match' ? pasteOnReply : { status: 200, json: { matched: true, longUrl: 'https://shop.example/p/42', linkId: 'lnk_42' } };
+        return { ok: true, status: r.status, json: async () => r.json, headers: { get: () => null } } as unknown as Response;
+      }) as unknown as typeof globalThis.fetch;
+      strait = createStrait({
+        publishableKey: 'st_pub_test_x', endpoint: 'https://acme.strait.link', runtime: iosRuntime(), fetch, storage: store(),
+        clipboard: {
+          hasProbableWebUrl: async () => {
+            used.push('detect');
+            if (!offDuringMatch) await strait.setEnabled(false); // off between the no-prompt detect and the read
+            return true;
+          },
+          readText: async () => { used.push('read'); return handoff; },
+        },
+      });
+      return { strait: () => strait, used, calls };
+    };
+
+    it('switched off while /v1/match is out: the clipboard is not touched, nothing is claimed', async () => {
+      const { strait, used, calls } = setup(true);
+      await strait().start();
+      await settle();
+      expect(used).toEqual([]);
+      expect(calls).toEqual(['/v1/match']);
+    });
+
+    it('switched off between the detect (no prompt) and the read: no read, nothing is claimed', async () => {
+      const { strait, used, calls } = setup(false);
+      await strait().start();
+      await settle();
+      expect(used).toEqual(['detect']);
+      expect(calls).toEqual(['/v1/match']);
+    });
+  });
+
   it('persists across launches', async () => {
     const s = store();
     await make(engine(), s).strait.setEnabled(false);

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fix (privacy, F7): switching the SDK off during the first-launch check no longer reads the iPhone clipboard
+  (paste handoff, which shows iOS's paste prompt). The switch is checked before the prompt-free "is there a link?"
+  check and again before the read; nothing is claimed.
 - Security (example app only, no SDK change): `examples/expo` no longer locks build-tool packages with known
   advisories: node-forge 1.4.0 -> 1.4.3 (12 advisories), glob 13 -> 14.0.3 (with path-scurry 2 -> 3) and
   minimatch 10 -> 11.0.4 (adds `@isaacs/nonrecursive-glob-match`, same author) by `overrides`, uuid 7 -> 11.1.1
