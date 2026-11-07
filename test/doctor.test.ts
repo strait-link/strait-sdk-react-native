@@ -92,15 +92,26 @@ describe.each(['android', 'ios'] as const)('doctorFindings: host checks (%s)', (
     });
   });
 
+  const appNone = {
+    id: 'app.none',
+    severity: 'error',
+    title: `No ${platform === 'android' ? 'Android' : 'iOS'} app is set up for acme.strait.link`,
+    fix: `Fill in Dashboard → Apps & stores (${platform === 'android' ? 'package name and SHA-256 fingerprint' : 'Team ID and bundle ID'}), wait a minute, then check again. Already done? Make sure acme.strait.link is your link domain from Dashboard → Get started.`,
+  };
+
   it('app.none when the file lists no app', () => {
     const r = run(ok200(platform === 'android' ? '[]' : aasa([])));
-    expect(r.findings[1]).toEqual({
-      id: 'app.none',
-      severity: 'error',
-      title: `No ${platform === 'android' ? 'Android' : 'iOS'} app is set up for acme.strait.link`,
-      fix: 'Add your app in Dashboard → Apps & stores.',
-    });
+    expect(r.findings[1]).toEqual(appNone);
     expect(r.ok).toBe(false);
+  });
+
+  // The most common first-time state (user-lens audit item 10): the Strait link domain answers
+  // 404 {"error":"not configured"} until Apps & stores is filled in. The fix is Apps & stores,
+  // not "use your Strait link domain" (they already are).
+  it('app.none, not host.file_missing, when the link domain answers 404 "not configured"', () => {
+    const r = run({ status: 404, body: '{"error":"not configured"}' });
+    expect(ids(r.findings)).toEqual(['key.ok', 'app.none']);
+    expect(r.findings[1]).toEqual(appNone);
   });
 });
 

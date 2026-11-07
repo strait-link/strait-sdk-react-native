@@ -83,14 +83,25 @@ export function doctorFindings(input: DoctorInput): DoctorReport {
   return { ok: !findings.some((f) => f.severity === 'error'), findings };
 }
 
+/** A Strait link domain answers 404 {"error":"not configured"} until Apps & stores has this platform's app. */
+function notConfigured(file: { status?: number; body?: string }): boolean {
+  if (file.status !== 404) return false;
+  try {
+    return JSON.parse(file.body ?? '')?.error === 'not configured';
+  } catch {
+    return false;
+  }
+}
+
 function hostFindings(input: DoctorInput, host: string, file: { status?: number; body?: string }): DoctorFinding[] {
   const android = input.platform === 'android';
   if (file.status === undefined)
     return [err('host.unreachable', `Can't reach ${host}`, 'Check that endpoint is your link domain (Dashboard → Get started) and that this device is online.')];
   const apps = file.status === 200 ? listedApps(input.platform, file.body ?? '') : null;
-  if (!apps)
+  if (!apps && !notConfigured(file))
     return [err('host.file_missing', `${host} doesn't serve ${android ? 'assetlinks.json' : 'apple-app-site-association'}`, 'Use your Strait link domain as endpoint (Dashboard → Get started); Strait serves this file there.')];
-  if (!apps.size) return [err('app.none', `No ${android ? 'Android' : 'iOS'} app is set up for ${host}`, 'Add your app in Dashboard → Apps & stores.')];
+  if (!apps?.size)
+    return [err('app.none', `No ${android ? 'Android' : 'iOS'} app is set up for ${host}`, `Fill in Dashboard → Apps & stores (${android ? 'package name and SHA-256 fingerprint' : 'Team ID and bundle ID'}), wait a minute, then check again. Already done? Make sure ${host} is your link domain from Dashboard → Get started.`)];
 
   const listed = [...apps.keys()].join(', ');
   const app = input.appId?.trim();
