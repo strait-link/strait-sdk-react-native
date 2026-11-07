@@ -2,6 +2,10 @@
 
 ## 0.11.0 (7 Nov 2026)
 
+- README: the Quick start install step renders as a code block again (the fence sat on the "1. Install."
+  line and broke the npm page), and it installs the packages the setup in "Use" imports (AsyncStorage,
+  Play Install Referrer, and `expo-application` or `react-native-device-info`); following the old README
+  failed the first build with "Unable to resolve module".
 - New: every call that records an app open or install (`/v1/open`, `/v1/resolve`, `/v1/referrer`,
   `/v1/match`, `/v1/handoff/claim`) now sends this SDK's version (`sdkVersion`) and, when you pass the new
   `appVersion` option to `createStrait` (or the legacy `resolveDeferredLink`), your app's version, so support

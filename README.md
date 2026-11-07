@@ -41,8 +41,16 @@ the other app SDKs via shared golden vectors (run in CI here).
 
 ## Quick start (60 seconds)
 
-**1. Install.** ```sh
-npm install @straitlink/react-native
+**1. Install** the SDK and the three packages the setup in [Use](#use) imports. Expo:
+
+```sh
+npx expo install @straitlink/react-native @react-native-async-storage/async-storage react-native-play-install-referrer expo-application
+```
+
+Bare React Native (then swap `expo-application` for `react-native-device-info`, see [Use](#use)):
+
+```sh
+npm install @straitlink/react-native @react-native-async-storage/async-storage react-native-play-install-referrer react-native-device-info
 ```
 
 **2. Check your key and a link.** In **Dashboard → Links**, make a link with the path `summer` and the destination `https://shop.example.com/product/42`. Then ask Strait about it the way this SDK will:
@@ -81,10 +89,18 @@ npm install @straitlink/react-native
 ```
 <!-- /brand:install -->
 
-Don't try other package names.
+The setup in [Use](#use) also needs these (it imports them; without them the app fails with
+"Unable to resolve module"):
 
-Android's exact deferred match also wants the Play Install Referrer
-(optional but recommended): see "Android" below.
+```sh
+# Expo
+npx expo install @react-native-async-storage/async-storage react-native-play-install-referrer expo-application
+# Bare React Native
+npm install @react-native-async-storage/async-storage react-native-play-install-referrer react-native-device-info
+```
+
+AsyncStorage keeps the once-per-install flag and unsent reports; the Play Install Referrer gives Android
+its exact deferred match; `expo-application` / `react-native-device-info` give the install time and app version.
 
 ### Expo: the config plugin
 
@@ -141,6 +157,10 @@ strait.onLinkStart(() => showLoading());
 strait.onLink((e) => e.matched && e.path && navigate(e.path, e.params));
 strait.start();
 ```
+
+Bare React Native (no Expo): import `react-native-device-info` instead of `expo-application` and use
+`installTime: () => DeviceInfo.getFirstInstallTime()` and `appVersion: DeviceInfo.getVersion()`
+(`import DeviceInfo from 'react-native-device-info';`).
 
 ### Reinstalls and backups (`installTime`, contract B6a)
 
