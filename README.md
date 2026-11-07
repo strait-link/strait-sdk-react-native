@@ -16,7 +16,7 @@ A tap opens the exact screen, and every link open and install is recorded in you
 <p align="center">
   <a href="https://github.com/strait-link/strait-sdk-react-native/tags"><img alt="Latest version" src="https://img.shields.io/github/v/tag/strait-link/strait-sdk-react-native?sort=semver&label=version&style=flat-square&labelColor=0F0D0A&color=423B33"></a>
   <a href="https://straitlink.in/platform-status/"><img alt="SDK: Beta" src="https://img.shields.io/badge/SDK-beta-423B33?style=flat-square&labelColor=0F0D0A"></a>
-  <a href="https://straitlink.in/iphone-status/"><img alt="iPhone: Live" src="https://img.shields.io/badge/iPhone-live-423B33?style=flat-square&labelColor=0F0D0A"></a>
+  <a href="https://straitlink.in/iphone-status/"><img alt="iPhone links: live · install matching: opt-in" src="https://img.shields.io/badge/iPhone%20links-live%20%C2%B7%20install%20matching%3A%20opt--in-423B33?style=flat-square&labelColor=0F0D0A"></a>
   <a href="https://github.com/strait-link/strait-sdk-react-native/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/strait-link/strait-sdk-react-native/ci.yml?branch=main&label=CI&style=flat-square&labelColor=0F0D0A"></a>
   <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-423B33?style=flat-square&labelColor=0F0D0A"></a>
 </p>
@@ -38,6 +38,23 @@ that choice from Strait at runtime (contract B19).
 
 Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
 the other app SDKs via shared golden vectors (run in CI here).
+
+## Set it up with one command
+
+The 5-minute path. In your app's folder (Expo or bare React Native; Node 18.17 or newer, nothing to install first), with the publishable key from **Dashboard → Get started**:
+
+```sh
+npx @straitlink/cli init --key st_pub_live_… --host <your-handle>.strait.link --dry-run   # show what it will write
+npx @straitlink/cli init --key st_pub_live_… --host <your-handle>.strait.link             # write it
+```
+
+It finds your app from its files, writes `links.ts` or `links.js` (plus `app/+native-intent.tsx` with Expo Router, or `src/links.ts` and `src/app/+native-intent.tsx` when your routes live in `src/app`) with your key, link address and an `onLink` handler, and prints what's left for you: the install command, the Android intent filters (or the Expo `app.json` block), the iPhone Associated Domains entry and what to fill in under **Dashboard → Apps & stores**. It never edits your existing files. Then check that your link domain lists your app:
+
+```sh
+npx @straitlink/cli doctor --host <your-handle>.strait.link --android <your.package> --ios <your.bundle.id>
+```
+
+Rather do it by hand? Follow the quick start below.
 
 ## Quick start (60 seconds)
 
