@@ -44,6 +44,8 @@ const cases = [
   ['app.none ios: not configured, app id unknown', { ...I, appId: null, file: { status: 404, body: '{"error":"not configured"}' } }],
   ['host.file_missing android 404 with another JSON error', { ...A, file: { status: 404, body: '{"error":"not found"}' } }],
   ['host.file_missing android 404 with a JSON string body', { ...A, file: { status: 404, body: '"not configured"' } }],
+  ['host.file_missing android 404 not configured with spaces (only the exact engine body counts)', { ...A, file: { status: 404, body: '{ "error": "not configured" }' } }],
+  ['host.file_missing android 404 not configured in single quotes', { ...A, file: { status: 404, body: "{'error':'not configured'}" } }],
   ['host.file_missing ios 500 with the not configured body', { ...I, file: { status: 500, body: '{"error":"not configured"}' } }],
   ['app.none android empty array', { ...A, file: ok200('[]') }],
   ['app.none android only web targets', { ...A, file: ok200(JSON.stringify([{ target: { namespace: 'web', site: E } }])) }],

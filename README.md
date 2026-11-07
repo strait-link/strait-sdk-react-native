@@ -39,22 +39,22 @@ that choice from Strait at runtime (contract B19).
 Part of [Strait](https://straitlink.in). The match signature stays in lockstep with the server and
 the other app SDKs via shared golden vectors (run in CI here).
 
-## Fastest: let the CLI set it up (about 5 minutes)
+## Set it up with one command
 
-In your app's folder (Expo or bare React Native; Node 18.17 or newer, nothing to install first), with the publishable key from **Dashboard → Get started**:
+The 5-minute path. In your app's folder (Expo or bare React Native; Node 18.17 or newer, nothing to install first), with the publishable key from **Dashboard → Get started**:
 
 ```sh
 npx @straitlink/cli init --key st_pub_live_… --host <your-handle>.strait.link --dry-run   # show what it will write
 npx @straitlink/cli init --key st_pub_live_… --host <your-handle>.strait.link             # write it
 ```
 
-It finds your app from its files, writes `links.ts` (plus `app/+native-intent.tsx` with Expo Router) with your key, link address and an `onLink` handler, and prints what's left for you: the install command, the Android intent filters (or the Expo `app.json` block), the iPhone Associated Domains entry and what to fill in under **Dashboard → Apps & stores**. It never edits your existing files. Then check that your link domain lists your app:
+It finds your app from its files, writes `links.ts` or `links.js` (plus `app/+native-intent.tsx` with Expo Router, or `src/links.ts` and `src/app/+native-intent.tsx` when your routes live in `src/app`) with your key, link address and an `onLink` handler, and prints what's left for you: the install command, the Android intent filters (or the Expo `app.json` block), the iPhone Associated Domains entry and what to fill in under **Dashboard → Apps & stores**. It never edits your existing files. Then check that your link domain lists your app:
 
 ```sh
 npx @straitlink/cli doctor --host <your-handle>.strait.link --android <your.package> --ios <your.bundle.id>
 ```
 
-Rather do it by hand? The quick start below is the same setup, step by step.
+Rather do it by hand? Follow the quick start below.
 
 ## Quick start (60 seconds)
 

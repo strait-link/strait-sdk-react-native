@@ -83,15 +83,12 @@ export function doctorFindings(input: DoctorInput): DoctorReport {
   return { ok: !findings.some((f) => f.severity === 'error'), findings };
 }
 
-/** A Strait link domain answers 404 {"error":"not configured"} until Apps & stores has this platform's app. */
-function notConfigured(file: { status?: number; body?: string }): boolean {
-  if (file.status !== 404) return false;
-  try {
-    return JSON.parse(file.body ?? '')?.error === 'not configured';
-  } catch {
-    return false;
-  }
-}
+/**
+ * A Strait link domain answers 404 {"error":"not configured"} until Apps & stores has this platform's app.
+ * Compared byte for byte (what the engine's well-known route sends), so every SDK agrees on any other body.
+ */
+const NOT_CONFIGURED = '{"error":"not configured"}';
+const notConfigured = (file: { status?: number; body?: string }) => file.status === 404 && file.body === NOT_CONFIGURED;
 
 function hostFindings(input: DoctorInput, host: string, file: { status?: number; body?: string }): DoctorFinding[] {
   const android = input.platform === 'android';
