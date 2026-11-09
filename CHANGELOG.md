@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.3 (9 Nov 2026)
+
+- The install now keeps its campaign. On Android's first launch the SDK sends the Google Play install referrer it
+  already reads (`installReferrer`, contract B26, shared-spec ADR 0008) with the call that records the install
+  (`createStrait` and the legacy `resolveDeferredLink`), so Strait can show which campaign brought it (`utm_source`,
+  `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`) even when the ad never went through a Strait link. Strait
+  keeps only those five tags; `gclid` and everything else is dropped on arrival and the raw string is never stored.
+  Not sent on `checkDeferred()`, on iPhone, when longer than 4096 characters, or while switched off
+  (`setEnabled(false)` sends nothing at all, as before).
+
 ## 0.11.2 (9 Nov 2026)
 
 - The SDK now names itself when it reports an app open or install: `sdkVersion` is `react-native/0.11.2`, not a bare

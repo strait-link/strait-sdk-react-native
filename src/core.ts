@@ -451,7 +451,7 @@ export class AppStateTracker {
 }
 
 /** This SDK's version, sent as `sdkVersion` = `react-native/<it>` (td2-23, B25). Equals package.json (test/app-version.test.ts). */
-export const SDK_VERSION = '0.11.2';
+export const SDK_VERSION = '0.11.3';
 
 /** A version string as the engine keeps it: trimmed, at most 64 printable ASCII characters; else undefined (not sent). */
 export function cleanVersion(v: unknown): string | undefined {
@@ -469,4 +469,16 @@ export function versionFields(appVersion: unknown): { appVersion?: string; sdkVe
   // B25 (shared-spec ADR 0007): the SDK names itself, so the engine can tell it from Swift/Android with the same number.
   const sdkVersion = `react-native/${SDK_VERSION}`;
   return app ? { appVersion: app, sdkVersion } : { sdkVersion };
+}
+
+/** The longest Play install referrer the engine reads (engine ADR 0106); a longer one is not sent. */
+export const INSTALL_REFERRER_MAX = 4096;
+
+/**
+ * B26: the raw Google Play install referrer as sent in `installReferrer` on the calls that record the install
+ * (`/v1/referrer`, `/v1/match`): the string itself when 1..4096 characters, else null (not sent). The engine keeps
+ * only its utm_source / medium / campaign / term / content; gclid and the rest are dropped there.
+ */
+export function installReferrerField(referrer: unknown): string | null {
+  return typeof referrer === 'string' && referrer.length > 0 && referrer.length <= INSTALL_REFERRER_MAX ? referrer : null;
 }

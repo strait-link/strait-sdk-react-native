@@ -328,6 +328,8 @@ two letters of the language. The **server** adds the IP it observes and
 computes the signature — the client never sends an IP, and the signature is
 never a cross-app identity.
 
+On Android's first launch the SDK also sends the Play install referrer string as read (`installReferrer`, contract B26) with the call that records the install, so the install keeps its campaign. Strait keeps only `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content`; `gclid` and any other parameter in it are dropped on arrival, never stored or logged. Not sent on the debug re-check, on iPhone, or while switched off.
+
 How iPhone install matching works, what is kept (IP only as a keyed hash, for 1 hour)
 and the App Store privacy label to use: https://straitlink.in/docs/iphone-install-matching/ .
 
