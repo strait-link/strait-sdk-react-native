@@ -450,8 +450,8 @@ export class AppStateTracker {
   }
 }
 
-/** This SDK's version, sent as `sdkVersion` (td2-23). Equals package.json (test/app-version.test.ts). */
-export const SDK_VERSION = '0.11.1';
+/** This SDK's version, sent as `sdkVersion` = `react-native/<it>` (td2-23, B25). Equals package.json (test/app-version.test.ts). */
+export const SDK_VERSION = '0.11.2';
 
 /** A version string as the engine keeps it: trimmed, at most 64 printable ASCII characters; else undefined (not sent). */
 export function cleanVersion(v: unknown): string | undefined {
@@ -466,5 +466,7 @@ export function cleanVersion(v: unknown): string | undefined {
  */
 export function versionFields(appVersion: unknown): { appVersion?: string; sdkVersion: string } {
   const app = cleanVersion(appVersion);
-  return app ? { appVersion: app, sdkVersion: SDK_VERSION } : { sdkVersion: SDK_VERSION };
+  // B25 (shared-spec ADR 0007): the SDK names itself, so the engine can tell it from Swift/Android with the same number.
+  const sdkVersion = `react-native/${SDK_VERSION}`;
+  return app ? { appVersion: app, sdkVersion } : { sdkVersion };
 }

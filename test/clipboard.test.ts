@@ -148,7 +148,7 @@ describe('B19: the first-launch flow with Paste handoff on (from the engine)', (
     const { calls: http, events, storage } = await run({ clipboard: clip }, { ...pasteOn, ...claimed });
     expect(calls).toEqual(['detect', 'read']);
     expect(http.map((c) => c.path)).toEqual(['/v1/match', '/v1/handoff/claim']); // device matching first
-    expect(http[1]!.body).toEqual({ publishableKey: PK, token: TOKEN, platform: 'ios', openId: events[0]!.id, at: 1_800_000_000_000, sdkVersion: SDK_VERSION });
+    expect(http[1]!.body).toEqual({ publishableKey: PK, token: TOKEN, platform: 'ios', openId: events[0]!.id, at: 1_800_000_000_000, sdkVersion: `react-native/${SDK_VERSION}` });
     expect(http[0]!.body.openId).toBe(events[0]!.id); // one install, one openId
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ kind: 'deferred', route: 'clipboard', matched: true, url: 'https://shop.example/p/42', linkId: 'lnk_42' });
