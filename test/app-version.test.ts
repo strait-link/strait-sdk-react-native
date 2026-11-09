@@ -10,7 +10,8 @@ import { SDK_VERSION, cleanVersion } from '../src/core.js';
 import { createStrait, resolveDeferredLink, type ClipboardAccess, type KeyValueStore, type StraitRuntime } from '../src/index.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
-const V = { appVersion: '4.12.0 (812)', sdkVersion: pkg.version };
+// B25 (shared-spec ADR 0007): the SDK names itself on the wire; SDK_VERSION stays the plain number.
+const V = { appVersion: '4.12.0 (812)', sdkVersion: `react-native/${pkg.version}` };
 const ENDPOINT = 'https://hilltop.links.test';
 const TOKEN = 'AbCdEfGhIjKlMnOpQrStUv';
 const HANDOFF = `${ENDPOINT}/h/${TOKEN}`;
@@ -119,7 +120,7 @@ describe('appVersion + sdkVersion on recording calls', () => {
     const e = engine();
     await make(e, runtime('ios'), store(), null).start();
     await settle();
-    expect(bodyOf(e, '/v1/match')).toMatchObject({ sdkVersion: pkg.version });
+    expect(bodyOf(e, '/v1/match')).toMatchObject({ sdkVersion: `react-native/${pkg.version}` });
     expect(bodyOf(e, '/v1/match')).not.toHaveProperty('appVersion');
   });
 

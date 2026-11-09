@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2 (9 Nov 2026)
+
+- The SDK now names itself when it reports an app open or install: `sdkVersion` is `react-native/0.11.2`, not a bare
+  `0.11.2` (contract B25, shared-spec ADR 0007). The same number can belong to the Swift or Android SDK, so Strait
+  couldn't tell which SDK an app runs; now the dashboard can say exactly when your app is on an older React Native
+  SDK. `SDK_VERSION` is still the plain number. Nothing else changes.
+
 ## 0.11.1 (9 Nov 2026)
 
 - iPhone install matching across IPv4 / IPv6 (contract B24, engine ADR 0101): when Safari tapped the link over IPv4
