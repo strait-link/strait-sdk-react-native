@@ -16,6 +16,7 @@ import {
   newOpenId,
   normalizeLinkHosts,
   parseHandoffUrl,
+  installReferrerField,
   parseStraitClick,
   parseStraitLink,
   pruneOpenQueue,
@@ -631,13 +632,16 @@ export function createStrait(config: CreateStraitConfig): Strait {
     let pasteHandoff = false;
     // Signal matching (B7 referrer / B8 match). Returns the event, not emitted.
     const signal = async (): Promise<Omit<LinkEvent, 'id'>> => {
+      // B26: the raw Play referrer rides on the calls that record the install, so the install keeps its campaign.
+      let install: { installReferrer?: string } = {};
       if (r.platform() === 'android') {
         const referrer = await r.getInstallReferrer().catch(() => null);
+        if (record) install = { installReferrer: installReferrerField(referrer) ?? undefined };
         const linkId = parseStraitLink(referrer);
         if (linkId) {
           const clickId = parseStraitClick(referrer) ?? undefined;
           const { json } = await answered('/v1/referrer', {
-            publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag, ...versions,
+            publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag, ...versions, ...install,
           });
           if (json.matched) {
             if (record) noteTap(replyClickId(json.clickId, clickId), t0);
@@ -648,7 +652,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
           }
         }
       }
-      const body = { publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag, ...versions };
+      const body = { publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag, ...versions, ...install };
       const first = (await answered('/v1/match', body)).json;
       pasteHandoff = pasteHandoffOn(first);
       // B24 (engine ADR 0101): asked over IPv6 and nothing found, the engine names its IPv4-only URL;

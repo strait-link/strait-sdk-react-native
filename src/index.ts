@@ -1,5 +1,5 @@
 import type { NativeAdapter } from './adapter.js';
-import { parseStraitLink, versionFields } from './core.js';
+import { installReferrerField, parseStraitLink, versionFields } from './core.js';
 import type { KeyValueStore } from './strait.js';
 
 export type { DeviceFields, NativeAdapter } from './adapter.js';
@@ -87,15 +87,19 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
   };
 
   // 1. Android deterministic path — exact, no fingerprint needed.
+  // B26: the raw Play referrer rides on both calls (each records the install), so the install keeps its campaign.
+  let install: { installReferrer?: string } = {};
   if (platform === 'android') {
-    let linkId: string | null = null;
+    let referrer: string | null = null;
     try {
-      linkId = parseStraitLink(await adapter.getInstallReferrer());
+      referrer = await adapter.getInstallReferrer();
     } catch {
-      linkId = null;
+      referrer = null;
     }
+    install = { installReferrer: installReferrerField(referrer) ?? undefined };
+    const linkId = parseStraitLink(referrer);
     if (linkId) {
-      const r = await post('/v1/referrer', { publishableKey: config.publishableKey, linkId, platform, ...versions });
+      const r = await post('/v1/referrer', { publishableKey: config.publishableKey, linkId, platform, ...versions, ...install });
       if (r.matched) return r;
       // else fall through to the probabilistic path
     }
@@ -108,7 +112,7 @@ export async function resolveDeferredLink(config: StraitConfig): Promise<MatchRe
   } catch {
     return NONE;
   }
-  return post('/v1/match', { publishableKey: config.publishableKey, platform, ...device, ...versions });
+  return post('/v1/match', { publishableKey: config.publishableKey, platform, ...device, ...versions, ...install });
 }
 
 export {
