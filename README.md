@@ -272,7 +272,7 @@ strait.setUserId(null);      // on sign-out
 
 Later `trackEvent` calls carry this id to your `app.event` webhook (`userId`, `userIdHashed`), so you can
 join Strait's tap, link and campaign to your own users and see which campaigns bring paying ones
-(contract B27). It is kept in memory only, never logged, ignored while `setEnabled(false)` (which also
+(contract B27). It is kept in memory only (an event saved offline keeps its id on the phone until it is sent, up to 7 days), never logged, ignored while `setEnabled(false)` (which also
 clears it), and not sent with app opens or installs.
 
 Emails and phone numbers never leave the phone: an id with `@` is sent as the SHA-256 hex of its

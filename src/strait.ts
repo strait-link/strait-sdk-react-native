@@ -839,6 +839,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
       return (await call('GET', `/v1/debug/fingerprint?publishableKey=${encodeURIComponent(config.publishableKey)}`)).json;
     },
     async trackEvent(name, extra = {}) {
+      // B27: the id as it is now, before any await (a setUserId right after this call must not change this event).
+      const user = userId;
       const r = await rt();
       if (!(await isEnabled())) return false;
       try {
@@ -856,7 +858,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
           ...(extra.currency !== undefined ? { currency: extra.currency } : {}),
           ...(extra.linkId !== undefined ? { linkId: extra.linkId } : {}),
           ...(clickId ? { clickId } : {}),
-          ...(userId ?? {}),
+          ...(user ?? {}),
         };
         const status = await sendReport(event);
         if (shouldRetryReport(status)) await enqueue(event);

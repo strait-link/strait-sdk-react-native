@@ -102,6 +102,20 @@ describe('setUserId (B27)', () => {
     expect(events[0]).not.toHaveProperty('userId');
   });
 
+  it('the id when trackEvent is called is the one sent, even if setUserId runs before the event goes out', async () => {
+    const { strait, events } = await make();
+    strait.setUserId('user_1');
+    const p = strait.trackEvent('purchase');
+    strait.setUserId(null);
+    await p;
+    strait.setUserId('user_2');
+    const q = strait.trackEvent('refund');
+    strait.setUserId('user_3');
+    await q;
+    expect(events.find((e) => e.event === 'purchase')).toMatchObject({ userId: 'user_1' });
+    expect(events.find((e) => e.event === 'refund')).toMatchObject({ userId: 'user_2' });
+  });
+
   it('a bad value clears the previous id instead of sending it', async () => {
     const { strait, events } = await make();
     strait.setUserId('user_1');
