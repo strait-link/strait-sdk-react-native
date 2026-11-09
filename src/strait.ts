@@ -59,6 +59,21 @@ const matchOf = (matched: boolean, m: unknown): { match?: MatchInfo } => {
  * handoff on? Only an explicit `ios.pasteHandoff: true` counts (an older engine
  * without the field = off). Read per reply, never stored.
  */
+/**
+ * The engine's IPv4-only match URL in an unmatched first-launch /v1/match reply (contract B24, engine
+ * ADR 0100), or null. Only an https URL whose path is exactly /v1/match (no query, no credentials).
+ */
+export function ipv4MatchUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 200 || !value.startsWith('https://')) return null;
+  try {
+    const u = new URL(value);
+    const plain = u.protocol === 'https:' && !!u.hostname && u.pathname === '/v1/match' && !u.search && !u.hash && !u.username && !u.password;
+    return plain ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function pasteHandoffOn(reply: unknown): boolean {
   const ios = (reply as { ios?: { pasteHandoff?: unknown } } | null | undefined)?.ios;
   return ios?.pasteHandoff === true;
@@ -396,10 +411,11 @@ export function createStrait(config: CreateStraitConfig): Strait {
   };
   // Every engine call goes through here: while opted out nothing leaves the device, except
   // `lookupOnly` (/v1/lookup: where a short link goes, recorded nowhere, ADR 0083 in the engine).
+  /** `path` on the endpoint, or an absolute URL (the engine's IPv4-only match URL, B24). */
   const call = (method: 'GET' | 'POST', path: string, body?: unknown, lookupOnly = false) =>
     timed(async (signal) => {
       if (!lookupOnly && !(await isEnabled())) throw new Error('disabled');
-      const res = await doFetch(`${base}${path}`, {
+      const res = await doFetch(path.startsWith('https://') ? path : `${base}${path}`, {
         method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
@@ -632,11 +648,15 @@ export function createStrait(config: CreateStraitConfig): Strait {
           }
         }
       }
-      const { json } = await answered('/v1/match', {
-        publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag, ...versions,
-      });
+      const body = { publishableKey: config.publishableKey, platform: r.platform(), ...r.collectDevice(), ...tag, ...versions };
+      const first = (await answered('/v1/match', body)).json;
+      pasteHandoff = pasteHandoffOn(first);
+      // B24 (engine ADR 0100): asked over IPv6 and nothing found, the engine names its IPv4-only URL;
+      // ask once more there (same openId, same fields). Only a match there replaces the first answer.
+      const v4 = record && first.matched !== true ? ipv4MatchUrl(first.ipv4Match) : null;
+      const again = v4 ? await answered(v4, body).then((res) => res.json, () => null) : null;
+      const json = again?.matched === true ? again : first;
       if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0);
-      pasteHandoff = pasteHandoffOn(json);
       return {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),

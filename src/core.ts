@@ -451,7 +451,7 @@ export class AppStateTracker {
 }
 
 /** This SDK's version, sent as `sdkVersion` (td2-23). Equals package.json (test/app-version.test.ts). */
-export const SDK_VERSION = '0.11.0';
+export const SDK_VERSION = '0.11.1';
 
 /** A version string as the engine keeps it: trimmed, at most 64 printable ASCII characters; else undefined (not sent). */
 export function cleanVersion(v: unknown): string | undefined {
