@@ -64,6 +64,7 @@ links.onLink((e) => { if (e.matched && e.path) navigate(e.path, e.params); });
 - React Navigation: subscribe in `NavigationContainer`'s `onReady`. Don't also list the link domain in `linking`
   (each link would be handled twice).
 - Conversions: `links.trackEvent('purchase', { value: 499, currency: 'INR' })` attaches the tap id automatically.
+- Your user: `links.setUserId(user.id)` after sign-in, `links.setUserId(null)` on sign-out; later events carry it to the `app.event` webhook (emails and phone numbers are hashed on the device, contract B27).
 
 ## Verify
 
