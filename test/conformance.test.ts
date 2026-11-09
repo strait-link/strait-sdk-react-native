@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AppStateTracker, browserScreenWidth, portraitScreenWidth, classifyUrl, normalizeLinkHosts, parseStraitClick, parseStraitLink,
-  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize, firstLaunchState, retryDelayMs, installReferrerField,
-  ATTRIBUTION_WINDOW_MS, INSTALL_REFERRER_MAX, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
+  pruneOpenQueue, shouldRetryReport, splitUrl, takeClickId, eventClickId, replyClickId, reportUrl, staleTap, parseHandoffUrl, deviceClassForSize, firstLaunchState, retryDelayMs, installReferrerField, userIdField,
+  ATTRIBUTION_WINDOW_MS, INSTALL_REFERRER_MAX, USER_ID_MAX, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS,
 } from '../src/core.js';
 
 /** Shared cross-SDK contract (shared-spec/conformance-vectors.json). */
@@ -11,7 +11,10 @@ const v = JSON.parse(readFileSync(new URL('./conformance-vectors.json', import.m
 
 describe('conformance vectors', () => {
   it('constants', () => {
-    expect({ RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, ATTRIBUTION_WINDOW_MS, INSTALL_REFERRER_MAX }).toEqual(v.constants);
+    expect({ RESUME_WINDOW_MS, TRANSIENT_PAUSE_MS, OPEN_QUEUE_MAX, OPEN_QUEUE_MAX_AGE_MS, ATTRIBUTION_WINDOW_MS, INSTALL_REFERRER_MAX, USER_ID_MAX }).toEqual(v.constants);
+  });
+  it.each(v.userId)('userIdField (B27): $name', ({ input, expected }) => {
+    expect(userIdField(input)).toEqual(expected);
   });
   it.each(v.installReferrer)('installReferrerField (B26) #%#', ({ input, expected }) => {
     expect(installReferrerField(input)).toBe(expected);
@@ -53,8 +56,8 @@ describe('conformance vectors', () => {
   it.each(v.parseHandoffUrl)('parseHandoffUrl: $name', ({ text, linkHosts, expected }) => {
     expect(parseHandoffUrl(text, linkHosts)).toBe(expected);
   });
-  it('vectors v12', () => {
-    expect(v.version).toBe(12);
+  it('vectors v13', () => {
+    expect(v.version).toBe(13);
   });
   it.each(v.takeClickId)('takeClickId($input)', ({ input, expected }) => {
     expect(takeClickId(input)).toEqual(expected);

@@ -29,6 +29,7 @@ import {
   shouldRetryReport,
   retryDelayMs,
   splitUrl,
+  userIdField,
   type DeviceClass,
 } from './core.js';
 import { doctorFindings, doctorHost, type DoctorReport } from './doctor.js';
@@ -295,6 +296,14 @@ export interface Strait {
   setEnabled(enabled: boolean): Promise<void>;
   /** The opt-out switch's current value (see setEnabled). */
   isEnabled(): Promise<boolean>;
+  /**
+   * Your own user id, after your sign-in (contract B27): later trackEvent calls carry it to your app.event
+   * webhook, so you can join Strait events to your users. An email or phone number is hashed here
+   * (SHA-256, `userIdHashed: true`) and never leaves the device. Kept in memory only: call it again when
+   * the app starts with a user already signed in, and `setUserId(null)` on sign-out. Ignored while opted
+   * out (setEnabled(false) also clears it). Never logged.
+   */
+  setUserId(id: string | null): void;
   stop(): void;
 }
 
@@ -318,6 +327,9 @@ interface QueuedEvent {
   currency?: string;
   linkId?: string;
   clickId?: string;
+  /** B27: the setUserId value when the app called trackEvent (hashed when it was an email or phone). */
+  userId?: string;
+  userIdHashed?: boolean;
 }
 
 /** One app open as reported to POST /v1/open (contract B14). */
@@ -363,6 +375,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
   let directArrived = false;
   /** Opt-out switch, read from storage once; unreadable storage = the default (on), like every other read here. */
   let enabled: boolean | undefined;
+  /** B27: in memory only, already hashed when it was an email or phone. */
+  let userId: ReturnType<typeof userIdField> = null;
   const isEnabled = async (): Promise<boolean> => {
     if (enabled === undefined) {
       const v = await storage.getItem(ENABLED_KEY).catch(() => null);
@@ -842,6 +856,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
           ...(extra.currency !== undefined ? { currency: extra.currency } : {}),
           ...(extra.linkId !== undefined ? { linkId: extra.linkId } : {}),
           ...(clickId ? { clickId } : {}),
+          ...(userId ?? {}),
         };
         const status = await sendReport(event);
         if (shouldRetryReport(status)) await enqueue(event);
@@ -885,6 +900,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     },
     async setEnabled(on) {
       enabled = on;
+      if (!on) userId = null;
       await storage.setItem(ENABLED_KEY, on ? '1' : '0').catch(() => undefined);
       if (!on) {
         // Opting out also deletes what was saved to send later.
@@ -900,6 +916,12 @@ export function createStrait(config: CreateStraitConfig): Strait {
       void flush();
     },
     isEnabled,
+    setUserId(id) {
+      const field = enabled === false ? null : userIdField(id);
+      userId = field;
+      // The switch not read yet (setUserId before start): drop it if the stored switch says off.
+      if (field && enabled === undefined) void isEnabled().then((on) => { if (!on && userId === field) userId = null; });
+    },
     stop() {
       for (const u of unsubs.splice(0)) u();
     },
