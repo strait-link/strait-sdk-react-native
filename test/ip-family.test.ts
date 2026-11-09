@@ -98,6 +98,27 @@ describe('B24: ask the IPv4-only URL once after an IPv6 miss', () => {
     expect(e.calls.filter((c) => c.host === 'v4.straitlink.test')).toHaveLength(0);
   });
 
+  it('paste handoff (B19) follows the first answer: still runs when the IPv4 ask misses, never when it matches', async () => {
+    const pasteMiss = { ...missV6, ios: { deviceMatching: true, pasteHandoff: true } };
+    const claimOk = { matched: true, longUrl: 'https://shop.example/x', linkId: 'lnk_1', matchMethod: 'clipboard' };
+    const clip = () => {
+      const seen: string[] = [];
+      return { seen, clip: { hasProbableWebUrl: async () => (seen.push('detect'), true), readText: async () => (seen.push('read'), 'https://hilltop.links.test/h/AbCdEfGhIjKlMnOpQrStUv') } };
+    };
+    for (const [second, expectClaim] of [[{ matched: false }, true], [hitV4, false]] as const) {
+      const c = clip();
+      const e = engine({ 'hilltop.links.test/v1/match': pasteMiss, 'v4.straitlink.test/v1/match': second, 'hilltop.links.test/v1/handoff/claim': claimOk });
+      const strait = createStrait({ publishableKey: PK, endpoint: ENDPOINT, runtime: runtime(), fetch: e.fetch, storage: store(), clipboard: c.clip });
+      const events: LinkEvent[] = [];
+      strait.onLink((ev) => events.push(ev));
+      await strait.start();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(e.calls.some((x) => x.path === '/v1/handoff/claim')).toBe(expectClaim);
+      expect(c.seen.length > 0).toBe(expectClaim);
+      expect(events[0]).toMatchObject(expectClaim ? { route: 'clipboard', matched: true } : { route: 'fingerprint', linkId: 'lnk_42' });
+    }
+  });
+
   it('ipv4MatchUrl accepts only a plain https …/v1/match URL', () => {
     expect(ipv4MatchUrl('https://v4.straitlink.in/v1/match')).toBe('https://v4.straitlink.in/v1/match');
     for (const bad of [null, 1, '', 'https://v4.straitlink.in/v1/match/', 'https://u:p@v4.straitlink.in/v1/match', 'https://v4.straitlink.in/v1/match#x', 'ftp://x/v1/match']) {

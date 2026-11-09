@@ -55,11 +55,6 @@ const matchOf = (matched: boolean, m: unknown): { match?: MatchInfo } => {
 };
 
 /**
- * B19: does this /v1/match reply say the workspace turned the iPhone Paste
- * handoff on? Only an explicit `ios.pasteHandoff: true` counts (an older engine
- * without the field = off). Read per reply, never stored.
- */
-/**
  * The engine's IPv4-only match URL in an unmatched first-launch /v1/match reply (contract B24, engine
  * ADR 0101), or null. Only an https URL whose path is exactly /v1/match (no query, no credentials).
  */
@@ -74,6 +69,11 @@ export function ipv4MatchUrl(value: unknown): string | null {
   }
 }
 
+/**
+ * B19: does this /v1/match reply say the workspace turned the iPhone Paste
+ * handoff on? Only an explicit `ios.pasteHandoff: true` counts (an older engine
+ * without the field = off). Read per reply, never stored.
+ */
 export function pasteHandoffOn(reply: unknown): boolean {
   const ios = (reply as { ios?: { pasteHandoff?: unknown } } | null | undefined)?.ios;
   return ios?.pasteHandoff === true;
