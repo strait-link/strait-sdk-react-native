@@ -451,7 +451,7 @@ export class AppStateTracker {
 }
 
 /** This SDK's version, sent as `sdkVersion` = `react-native/<it>` (td2-23, B25). Equals package.json (test/app-version.test.ts). */
-export const SDK_VERSION = '0.11.4';
+export const SDK_VERSION = '0.11.5';
 
 /** A version string as the engine keeps it: trimmed, at most 64 printable ASCII characters; else undefined (not sent). */
 export function cleanVersion(v: unknown): string | undefined {
@@ -487,21 +487,53 @@ export function installReferrerField(referrer: unknown): string | null {
 export const USER_ID_MAX = 128;
 
 /**
- * B27 (shared-spec ADR 0009): what `setUserId(id)` sends with later events, or null (nothing sent).
- * Trimmed; empty, longer than USER_ID_MAX or holding a control character = null. An email (any `@`) is
- * sent as the SHA-256 hex of its lower-case form, a phone number (only digits, spaces, `+ ( ) . -`, with
- * 8-15 digits) as the SHA-256 hex of its digits: `userIdHashed: true`, the raw value never leaves the device.
+ * B27 (shared-spec ADR 0009, ADR 0010): what `setUserId(id)` sends with later events, or null (nothing sent).
+ * Trimmed; empty, longer than USER_ID_MAX or holding a control character = null. An email (any `@`, `＠` or `﹫`)
+ * is sent as the SHA-256 hex of its lower-case form, a phone number (`phoneNumberForm`) as the SHA-256 hex of its
+ * canonical form: `userIdHashed: true`, the raw value never leaves the device.
  */
 export function userIdField(id: unknown): { userId: string; userIdHashed: boolean } | null {
   if (typeof id !== 'string') return null;
   const t = id.trim();
   if (!t || t.length > USER_ID_MAX) return null;
-  if (t.includes('@')) return { userId: sha256Hex(t.toLowerCase()), userIdHashed: true };
-  const digits = t.replace(/\D/g, '');
-  if (/^\+?[0-9 ().-]+$/.test(t) && digits.length >= 8 && digits.length <= 15) return { userId: sha256Hex(digits), userIdHashed: true };
+  if (/[@\uff20\ufe6b]/.test(t)) return { userId: sha256Hex(t.toLowerCase()), userIdHashed: true };
+  const phone = phoneNumberForm(t);
+  if (phone) return { userId: sha256Hex(phone), userIdHashed: true };
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(t)) return null;
   return { userId: t, userIdHashed: false };
+}
+
+/** The zero of each run of ten decimal digits B27 reads: ASCII, Arabic-Indic, Eastern Arabic-Indic, Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, full-width. */
+const DIGIT_ZEROS = [0x30, 0x660, 0x6f0, 0x966, 0x9e6, 0xa66, 0xae6, 0xb66, 0xbe6, 0xc66, 0xce6, 0xd66, 0xff10];
+
+/** Characters a written phone number may hold between its digits (B27 v15): spaces, dashes, dots, brackets, slashes, invisible marks. */
+function isPhoneSeparator(c: number): boolean {
+  return c === 0x20 || c === 0x28 || c === 0x29 || c === 0x2d || c === 0x2e || c === 0x2f || c === 0xa0 ||
+    (c >= 0x2000 && c <= 0x2015) || (c >= 0x202a && c <= 0x202f) || c === 0x205f || c === 0x2060 || (c >= 0x2066 && c <= 0x2069) ||
+    c === 0x2212 || c === 0x3000 || c === 0xfeff || c === 0xff08 || c === 0xff09 || (c >= 0xff0d && c <= 0xff0f);
+}
+
+/**
+ * B27 v15 (shared-spec ADR 0010): the canonical form of a phone number, or null when `t` is not one. After an
+ * optional `tel:` (any ASCII case), `t` may hold only decimal digits (any `DIGIT_ZEROS` run), separators and one
+ * `+` / `＋` before the first digit, with 8-15 digits (8-17 when they start with the international `00` and there
+ * is no `+`). Form: `+` and the digits when written with `+`; `+` and the digits after `00`; else the digits (ASCII).
+ */
+export function phoneNumberForm(t: string): string | null {
+  const s = /^tel:/i.test(t) ? t.slice(4) : t;
+  let plus = false;
+  let digits = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const zero = DIGIT_ZEROS.find((z) => c >= z && c <= z + 9);
+    if (zero !== undefined) digits += String(c - zero);
+    else if ((c === 0x2b || c === 0xff0b) && !plus && !digits) plus = true;
+    else if (!isPhoneSeparator(c)) return null;
+  }
+  const zeroZero = !plus && digits.startsWith('00');
+  if (digits.length < 8 || digits.length > (zeroZero ? 17 : 15)) return null;
+  return plus ? `+${digits}` : zeroZero ? `+${digits.slice(2)}` : digits;
 }
 
 /** SHA-256 of the UTF-8 bytes of `s`, lower-case hex (FIPS 180-4; no crypto API in Hermes). */

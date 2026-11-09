@@ -21,9 +21,40 @@ describe('userIdField', () => {
   it('hashes an email, lower-cased and trimmed', () => {
     expect(userIdField(' Priya@Example.COM ')).toEqual({ userId: node('priya@example.com'), userIdHashed: true });
   });
-  it('hashes a phone number as its digits', () => {
-    expect(userIdField('+91 98765-43210')).toEqual({ userId: node('919876543210'), userIdHashed: true });
+  it('hashes a phone number as + and its digits (E.164 as written), or its digits without a country code', () => {
+    expect(userIdField('+91 98765-43210')).toEqual({ userId: node('+919876543210'), userIdHashed: true });
+    expect(userIdField('9876543210')).toEqual({ userId: node('9876543210'), userIdHashed: true });
   });
+  // v15 (shared-spec ADR 0010): formats v14 sent raw.
+  it.each([
+    ['00 international prefix = +', '0091 98765 43210', '+919876543210'],
+    ['+ inside brackets', '(+91) 98765 43210', '+919876543210'],
+    ['no-break spaces', '+91\u00a098765\u00a043210', '+919876543210'],
+    ['narrow no-break space', '+91\u202f98765\u202f43210', '+919876543210'],
+    ['bidi marks from a copied contact', '\u202a+91 98765 43210\u202c', '+919876543210'],
+    ['en dash', '+91\u201398765\u201343210', '+919876543210'],
+    ['non-breaking hyphen', '98765\u201143210', '9876543210'],
+    ['minus sign', '98765\u221243210', '9876543210'],
+    ['slash', '98765/43210', '9876543210'],
+    ['tel: link', 'tel:+91-98765-43210', '+919876543210'],
+    ['TEL: in capitals', 'TEL:9876543210', '9876543210'],
+    ['full-width', '\uff0b\uff19\uff11 \uff19\uff18\uff17\uff16\uff15 \uff14\uff13\uff12\uff11\uff10', '+919876543210'],
+    ['Devanagari digits', '\u096f\u096e\u096d\u096c\u096b\u096a\u0969\u0968\u0967\u0966', '9876543210'],
+    ['17 digits after 00', '00123456789012345', '+123456789012345'],
+  ])('hashes a phone: %s', (_name, input, form) => {
+    expect(userIdField(input)).toEqual({ userId: node(form), userIdHashed: true });
+  });
+  it.each([
+    ['full-width at sign', 'priya\uff20example.com'],
+    ['small at sign', 'priya\ufe6bexample.com'],
+  ])('hashes an email: %s', (_name, input) => {
+    expect(userIdField(input)).toEqual({ userId: node(input.toLowerCase()), userIdHashed: true });
+  });
+  it.each(['98765+43210', '++919876543210', '+91 98765 43210 ext 12', 'order 12345', '1234567', '+1234567890123456', '0012345678901234567', 'tel:1234567', '#98765432'])(
+    'keeps a non-phone as an id: %s', (input) => {
+      expect(userIdField(input)).toEqual({ userId: input, userIdHashed: false });
+    },
+  );
   it('drops empty, too long, control characters and non-strings', () => {
     for (const bad of [null, undefined, 42, '', '   ', 'x'.repeat(USER_ID_MAX + 1), 'a\nb']) expect(userIdField(bad)).toBeNull();
     expect(userIdField('x'.repeat(USER_ID_MAX))).toEqual({ userId: 'x'.repeat(USER_ID_MAX), userIdHashed: false });

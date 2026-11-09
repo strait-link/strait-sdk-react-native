@@ -56,8 +56,8 @@ describe('conformance vectors', () => {
   it.each(v.parseHandoffUrl)('parseHandoffUrl: $name', ({ text, linkHosts, expected }) => {
     expect(parseHandoffUrl(text, linkHosts)).toBe(expected);
   });
-  it('vectors v14', () => {
-    expect(v.version).toBe(14);
+  it('vectors v15', () => {
+    expect(v.version).toBe(15);
   });
   it.each(v.takeClickId)('takeClickId($input)', ({ input, expected }) => {
     expect(takeClickId(input)).toEqual(expected);
