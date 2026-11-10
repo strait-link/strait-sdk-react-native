@@ -248,6 +248,38 @@ export function eventClickId(stored: string | null | undefined, now: number, exp
   return age >= 0 && age <= ATTRIBUTION_WINDOW_MS ? clickId.toLowerCase() : null;
 }
 
+/** B28: the days after the install that send a "came back" note, and a day in ms. */
+export const RETURN_DAYS = [1, 7, 30] as const;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Storage value for the install's tap (key `strait.installTap`, B28): `{"clickId":…,"at":<epoch ms>,"sent":[…]}`. */
+export function installTapValue(clickId: string, at: number, sent: number[] = []): string {
+  return JSON.stringify({ clickId: clickId.toLowerCase(), at, sent });
+}
+
+/**
+ * The "came back" note due now (contract B28), or null: the install tap (`stored`, see
+ * `installTapValue`) is readable, `day` = whole days since the install open is 1, 7 or 30, and
+ * that day was not sent yet. At most three per install, ever.
+ */
+export function returnNote(stored: string | null | undefined, now: number): { day: number; clickId: string; openId: string } | null {
+  if (!stored) return null;
+  let tap: unknown;
+  try {
+    tap = JSON.parse(stored);
+  } catch {
+    return null;
+  }
+  const { clickId, at, sent } = (tap ?? {}) as { clickId?: unknown; at?: unknown; sent?: unknown };
+  if (typeof clickId !== 'string' || !CLICK_ID.test(clickId)) return null;
+  if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0 || now < at) return null;
+  const day = Math.floor((now - at) / DAY_MS);
+  if (!(RETURN_DAYS as readonly number[]).includes(day)) return null;
+  if (Array.isArray(sent) && sent.some((d) => d === day)) return null;
+  const id = clickId.toLowerCase();
+  return { day, clickId: id, openId: `r${day}-${id}` };
+}
+
 /**
  * True when the remembered tap (`stored`, see `rememberTap`) is set but can no
  * longer be used: unreadable, malformed, or opened more than
