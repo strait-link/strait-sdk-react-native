@@ -10,6 +10,8 @@ import {
   classifyUrl,
   eventClickId,
   firstLaunchState,
+  installTapValue,
+  returnNote,
   newEventId,
   reportUrl,
   staleTap,
@@ -333,6 +335,19 @@ interface QueuedEvent {
 }
 
 /** One app open as reported to POST /v1/open (contract B14). */
+/** B28: a "came back" note (day 1, 7 or 30 after the install), saved like an open report. */
+interface ReturnReport {
+  type: 'return';
+  openId: string;
+  kind: 'return';
+  day: number;
+  clickId: string;
+  platform: string;
+  at: number;
+  appVersion?: string;
+  sdkVersion?: string;
+}
+
 interface OpenReport {
   openId: string;
   kind: 'direct' | 'deferred';
@@ -356,6 +371,7 @@ const QUEUE_KEY = 'strait.pendingOpens';
 const TAP_KEY = 'strait.lastTap';
 const INSTALL_TIME_KEY = 'strait.installTime';
 const ENABLED_KEY = 'strait.enabled';
+const INSTALL_TAP_KEY = 'strait.installTap';
 /** Per request, like the Android SDK's 10 s connect/read timeouts. */
 const HTTP_TIMEOUT_MS = 10_000;
 export function createStrait(config: CreateStraitConfig): Strait {
@@ -450,10 +466,13 @@ export function createStrait(config: CreateStraitConfig): Strait {
     tapWrite = tapWrite.then(() => storage.setItem(TAP_KEY, value)).catch(() => undefined);
   };
   // Checked inside the chain: a reply that lands after setEnabled(false) keeps no tap.
-  const noteTap = (clickId: string | null | undefined, at: number) => {
+  // B28: `install` = this open is the install's own first open; its tap id is kept once as the install tap.
+  const noteTap = (clickId: string | null | undefined, at: number, install = false) => {
     tapWrite = tapWrite
       .then(async () => {
-        if (await isEnabled()) await storage.setItem(TAP_KEY, clickId ? rememberTap(clickId, at) : '');
+        if (!(await isEnabled())) return;
+        await storage.setItem(TAP_KEY, clickId ? rememberTap(clickId, at) : '');
+        if (install && clickId && !(await storage.getItem(INSTALL_TAP_KEY))) await storage.setItem(INSTALL_TAP_KEY, installTapValue(clickId, at));
       })
       .catch(() => undefined);
   };
@@ -475,7 +494,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     queueOp = p.catch(() => undefined);
     return p;
   };
-  type Queued = OpenReport | QueuedEvent;
+  type Queued = OpenReport | ReturnReport | QueuedEvent;
   const readQueue = async (): Promise<Queued[]> => {
     try {
       const v = JSON.parse((await storage.getItem(QUEUE_KEY)) ?? '[]');
@@ -505,6 +524,9 @@ export function createStrait(config: CreateStraitConfig): Strait {
       if ('type' in report && report.type === 'event') {
         const { type: _t, at: _a, ...event } = report;
         res = await call('POST', '/v1/event', { publishableKey: config.publishableKey, ...event });
+      } else if ('type' in report && report.type === 'return') {
+        const { type: _t, ...note } = report; // B28: no device class, nothing but the note
+        res = await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...note });
       } else {
         res = await call('POST', '/v1/open', { publishableKey: config.publishableKey, ...report, ...deviceClassOf(r) });
       }
@@ -516,7 +538,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
     }
   };
   /** Report an open now; keep it for retry if it doesn't get through. */
-  const report = async (rep: OpenReport) => {
+  const report = async (rep: OpenReport | ReturnReport) => {
     const status = await sendReport(rep);
     if (shouldRetryReport(status)) await enqueue(rep);
     else void flush(); // the network works: send anything saved earlier
@@ -587,7 +609,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         });
         const matched = json.matched === true;
         const reason = matched ? undefined : json.reason ?? json.error;
-        if (matched) noteTap(replyClickId(json.clickId), t0);
+        if (matched) noteTap(replyClickId(json.clickId), t0, firstLaunch);
         if (json.recorded !== true) void report({ ...base, matched, reason, linkId: json.linkId });
         return emit(id, {
           kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched, reason,
@@ -601,7 +623,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         return emit(id, { kind: 'direct', route: 'app_link', appState, rawUrl: raw, matched: false, reason: 'network', ms: r.now() - t0, at: t0 });
       }
     }
-    if (c.clickId && on) noteTap(c.clickId, t0);
+    if (c.clickId && on) noteTap(c.clickId, t0, firstLaunch);
     // Navigation never waits for the report.
     if (on && (!web || webTap)) void report({
       openId: id, kind: 'direct', route: c.route, appState, platform, url: reportUrl(c.url),
@@ -658,7 +680,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
             publishableKey: config.publishableKey, linkId, clickId, platform: 'android', ...tag, ...versions, ...install,
           });
           if (json.matched) {
-            if (record) noteTap(replyClickId(json.clickId, clickId), t0);
+            if (record) noteTap(replyClickId(json.clickId, clickId), t0, true);
             return {
               kind: 'deferred', route: 'install_referrer', appState: 'closed', matched: true,
               ...destination(json.longUrl), linkId: json.linkId ?? linkId, ...referral(true, json.referralCode), ...matchOf(true, json.match), ms: r.now() - t0, at: t0,
@@ -674,7 +696,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
       const v4 = record && first.matched !== true ? ipv4MatchUrl(first.ipv4Match) : null;
       const again = v4 ? await answered(v4, body).then((res) => res.json, () => null) : null;
       const json = again?.matched === true ? again : first;
-      if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0);
+      if (record && json.matched === true) noteTap(replyClickId(json.clickId), t0, true);
       return {
         kind: 'deferred', route: 'fingerprint', appState: 'closed', matched: json.matched === true,
         reason: json.matched ? undefined : 'no_match', ...destination(json.matched ? json.longUrl : undefined),
@@ -704,7 +726,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         publishableKey: config.publishableKey, token, platform: 'ios', ...tag, ...versions,
       });
       if (json.matched !== true) return done(result); // not claimable: keep the match result
-      noteTap(replyClickId(json.clickId), t0);
+      noteTap(replyClickId(json.clickId), t0, true);
       return done({
         kind: 'deferred', route: 'clipboard', appState: 'closed', matched: true,
         ...destination(json.longUrl), linkId: json.linkId, ...referral(true, json.referralCode), ...matchOf(true, json.match), ms: r.now() - t0, at: t0,
@@ -755,6 +777,27 @@ export function createStrait(config: CreateStraitConfig): Strait {
     }
   }
 
+  // B28: the day 1 / 7 / 30 "came back" note. Marked sent before it goes (a failed write sends nothing),
+  // one check at a time; then reported like an open (queued and retried on no answer, 429 or 5xx).
+  let returnCheck: Promise<void> | null = null;
+  const checkReturn = (): Promise<void> =>
+    (returnCheck ??= (async () => {
+      const r = await rt();
+      if (r.isWeb?.() === true || !(await isEnabled())) return;
+      await tapWrite;
+      const stored = await storage.getItem(INSTALL_TAP_KEY);
+      const now = r.now();
+      const note = returnNote(stored, now);
+      if (!note) return;
+      const tap = JSON.parse(stored!) as { at: number; sent?: unknown };
+      const sent = Array.isArray(tap.sent) ? tap.sent.filter((d): d is number => typeof d === 'number') : [];
+      await storage.setItem(INSTALL_TAP_KEY, installTapValue(note.clickId, tap.at, [...sent, note.day]));
+      if (!(await isEnabled())) return; // switched off meanwhile
+      await report({ type: 'return', openId: note.openId, kind: 'return', day: note.day, clickId: note.clickId, platform: r.platform(), at: now, ...versions });
+    })().catch(() => undefined).finally(() => {
+      returnCheck = null;
+    }));
+
   const markChecked = () => storage.setItem(DEFERRED_FLAG, '1').catch(() => undefined);
   /** The once-per-install check; marked done only once the engine answered (offline → next launch;
    *  switched off meanwhile → when back on). */
@@ -787,7 +830,10 @@ export function createStrait(config: CreateStraitConfig): Strait {
       unsubs.push(
         r.onAppState((s) => {
           tracker.onState(s, r.now());
-          if (s === 'active') void flush();
+          if (s === 'active') {
+            void flush();
+            void checkReturn();
+          }
         }),
         r.onURL((u) => void handleUrl(u, tracker.classify(r.now()))),
       );
@@ -805,6 +851,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
         if (s.clearFlag) await storage.setItem(DEFERRED_FLAG, '').catch(() => undefined);
         if (s.storeInstallTime !== null) await storage.setItem(INSTALL_TIME_KEY, s.storeInstallTime).catch(() => undefined);
         firstLaunch = s.firstLaunch;
+        // B28: a new install (or a restored backup of another one) starts without an install tap.
+        if (firstLaunch) await storage.setItem(INSTALL_TAP_KEY, '').catch(() => undefined);
       }
       isFirstLaunch = firstLaunch;
       if (initial) {
@@ -816,6 +864,7 @@ export function createStrait(config: CreateStraitConfig): Strait {
         if (await isEnabled()) await firstCheck();
         else deferredDue = true; // opted out: not marked done, runs when switched back on
       }
+      void checkReturn();
       void flush();
     },
     onLink(cb) {
@@ -908,6 +957,8 @@ export function createStrait(config: CreateStraitConfig): Strait {
         // Opting out also deletes what was saved to send later.
         await serial(() => writeQueue([]));
         setTap('');
+        // B28: an install that opted out never sends a "came back" note again.
+        tapWrite = tapWrite.then(() => storage.setItem(INSTALL_TAP_KEY, '')).catch(() => undefined);
         await tapWrite;
         return;
       }
