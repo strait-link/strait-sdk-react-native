@@ -507,11 +507,11 @@ export function userIdField(id: unknown): { userId: string; userIdHashed: boolea
 /** The zero of each run of ten decimal digits B27 reads: ASCII, Arabic-Indic, Eastern Arabic-Indic, Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, full-width. */
 const DIGIT_ZEROS = [0x30, 0x660, 0x6f0, 0x966, 0x9e6, 0xa66, 0xae6, 0xb66, 0xbe6, 0xc66, 0xce6, 0xd66, 0xff10];
 
-/** Characters a written phone number may hold between its digits (B27 v15): spaces, dashes, dots, brackets, slashes, invisible marks. */
+/** Characters a written phone number may hold between its digits (B27 v15): spaces, dashes (incl. Japanese ー), dots, brackets, slashes, invisible marks. */
 function isPhoneSeparator(c: number): boolean {
   return c === 0x20 || c === 0x28 || c === 0x29 || c === 0x2d || c === 0x2e || c === 0x2f || c === 0xa0 ||
     (c >= 0x2000 && c <= 0x2015) || (c >= 0x202a && c <= 0x202f) || c === 0x205f || c === 0x2060 || (c >= 0x2066 && c <= 0x2069) ||
-    c === 0x2212 || c === 0x3000 || c === 0xfeff || c === 0xff08 || c === 0xff09 || (c >= 0xff0d && c <= 0xff0f);
+    c === 0xad || c === 0x61c || c === 0x30fc || c === 0xff70 || c === 0x2212 || c === 0x3000 || c === 0xfeff || c === 0xff08 || c === 0xff09 || (c >= 0xff0d && c <= 0xff0f);
 }
 
 /**
