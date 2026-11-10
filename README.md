@@ -276,7 +276,7 @@ join Strait's tap, link and campaign to your own users and see which campaigns b
 clears it), and not sent with app opens or installs.
 
 Emails and phone numbers never leave the phone: an id with `@` is sent as the SHA-256 hex of its
-lower-cased form, a phone number (8-15 digits with any spaces, dashes, dots, brackets
+lower-cased form (letter by letter: `İ` → `i̇`, `Σ` → `σ`; ADR 0011), a phone number (8-15 digits with any spaces, dashes, dots, brackets
 or slashes, an optional `+`, `00` or `tel:`; Indian, Arabic and full-width digits too) as the SHA-256 hex of `+` and
 its digits when written with `+` or `00`, else of its digits, with `userIdHashed: true` (shared-spec ADR 0010). To
 join, hash your own value the same way (`sha256("priya@example.com")`, `sha256("+919876543210")` for a number
