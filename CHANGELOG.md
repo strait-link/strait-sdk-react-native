@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.6 (10 Nov 2026)
+
+- `setUserId` lower-cases an email the same way in every Strait SDK and the engine (contract B27 v16, shared-spec
+  ADR 0011): letter by letter, with no language rules, `İ` → `i̇` (i + U+0307) and `Σ` → `σ` (never the word-final `ς`).
+  Only an email with a capital `Σ` at the end of a word hashes differently (JavaScript gave `ς` there). ASCII emails keep their hash. Conformance vectors v16.
+
 ## 0.11.5 (10 Nov 2026)
 
 - `setUserId` hashes more ways of writing a phone number, so none leaves the phone raw (contract B27 v15, shared-spec

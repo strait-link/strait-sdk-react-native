@@ -451,7 +451,7 @@ export class AppStateTracker {
 }
 
 /** This SDK's version, sent as `sdkVersion` = `react-native/<it>` (td2-23, B25). Equals package.json (test/app-version.test.ts). */
-export const SDK_VERSION = '0.11.5';
+export const SDK_VERSION = '0.11.6';
 
 /** A version string as the engine keeps it: trimmed, at most 64 printable ASCII characters; else undefined (not sent). */
 export function cleanVersion(v: unknown): string | undefined {
@@ -487,16 +487,24 @@ export function installReferrerField(referrer: unknown): string | null {
 export const USER_ID_MAX = 128;
 
 /**
+ * B27 v16 (shared-spec ADR 0011): lower case per code point, no context, no language, so every runtime agrees:
+ * `İ` → `i̇` (i + U+0307) and `Σ` → `σ` first (runtimes disagree on both: final sigma, one-char case APIs).
+ */
+function lowerEmail(s: string): string {
+  return s.replace(/\u0130/g, 'i\u0307').replace(/\u03a3/g, '\u03c3').toLowerCase();
+}
+
+/**
  * B27 (shared-spec ADR 0009, ADR 0010): what `setUserId(id)` sends with later events, or null (nothing sent).
  * Trimmed; empty, longer than USER_ID_MAX or holding a control character = null. An email (any `@`, `＠` or `﹫`)
- * is sent as the SHA-256 hex of its lower-case form, a phone number (`phoneNumberForm`) as the SHA-256 hex of its
+ * is sent as the SHA-256 hex of `lowerEmail` of it, a phone number (`phoneNumberForm`) as the SHA-256 hex of its
  * canonical form: `userIdHashed: true`, the raw value never leaves the device.
  */
 export function userIdField(id: unknown): { userId: string; userIdHashed: boolean } | null {
   if (typeof id !== 'string') return null;
   const t = id.trim();
   if (!t || t.length > USER_ID_MAX) return null;
-  if (/[@\uff20\ufe6b]/.test(t)) return { userId: sha256Hex(t.toLowerCase()), userIdHashed: true };
+  if (/[@\uff20\ufe6b]/.test(t)) return { userId: sha256Hex(lowerEmail(t)), userIdHashed: true };
   const phone = phoneNumberForm(t);
   if (phone) return { userId: sha256Hex(phone), userIdHashed: true };
   // eslint-disable-next-line no-control-regex

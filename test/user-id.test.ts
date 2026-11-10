@@ -21,6 +21,16 @@ describe('userIdField', () => {
   it('hashes an email, lower-cased and trimmed', () => {
     expect(userIdField(' Priya@Example.COM ')).toEqual({ userId: node('priya@example.com'), userIdHashed: true });
   });
+  // v16 (shared-spec ADR 0011): per-code-point lower case, no context: İ → i̇, Σ → σ even at the end of a word.
+  it.each([
+    ['İ → i + U+0307', 'İPEK@Example.com', 'i̇pek@example.com'],
+    ['Σ before @ → σ (not ς)', 'ΚΩΣΤΑΣ@example.gr', 'κωστασ@example.gr'],
+    ['Σ before . → σ', 'ΑΣ.ΒΗΤΑ@example.gr', 'ασ.βητα@example.gr'],
+    ['Σ at the end → σ', 'nikos@ΟΔΟΣ', 'nikos@οδοσ'],
+    ['ς stays ς', 'κώστας@example.gr', 'κώστας@example.gr'],
+  ])('lower-cases %s', (_n, input, lower) => {
+    expect(userIdField(input)).toEqual({ userId: node(lower), userIdHashed: true });
+  });
   it('hashes a phone number as + and its digits (E.164 as written), or its digits without a country code', () => {
     expect(userIdField('+91 98765-43210')).toEqual({ userId: node('+919876543210'), userIdHashed: true });
     expect(userIdField('9876543210')).toEqual({ userId: node('9876543210'), userIdHashed: true });
